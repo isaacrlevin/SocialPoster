@@ -1,0 +1,21 @@
+<div class="sp-page-header d-flex align-center flex-wrap gap-3">
+    <div class="min-w-0">
+        <h1 class="mud-typography mud-typography-h4 sp-page-title">@Title</h1>
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <MudText Typo="Typo.body1" Color="Color.Secondary">@Subtitle</MudText>
+        }
+        @ChildContent
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="ms-auto d-flex align-center flex-wrap gap-2">@Actions</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

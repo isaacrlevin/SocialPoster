@@ -1,0 +1,797 @@
+@page "/"
+@implements IDisposable
+@inject ContactService Contacts
+@inject PublishService Publisher
+@inject AccountSearchService Searches
+@inject AccountFinder Finder
+@inject IJSRuntime JS
+
+<PageTitle>Compose · SocialPoster</PageTitle>
+
+<PageHeader Title="Compose" Subtitle="Write once and publish everywhere. Type @@ to mention someone; it's converted for each platform." />
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" lg="5">
+        <MudPaper Class="sp-card" Elevation="0">
+            <div class="sp-card-header">
+                <MudIcon Icon="@Icons.Material.Filled.EditNote" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">Your post</MudText>
+            </div>
+            <div class="sp-card-body">
+                <div class="mention-host">
+                    <textarea id="@BaseId" class="composer" rows="9" aria-label="Your post"
+                              placeholder="I love @@isaacrlevin… (type @@ to search Bluesky, your saved contacts and X)"
+                              @bind="baseTemplate" @bind:event="oninput" @bind:after="OnTemplatesChanged"></textarea>
+                    @if (activeEditor == BaseId)
+                    {
+                        @MentionPopup
+                    }
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                    Mentions appear as <code class="key">{@@key}</code> tokens. Picking someone new saves them to your contacts automatically.
+                </MudText>
+
+                <div class="sp-section-label mt-5 mb-2">Media</div>
+                <div class="sp-dropzone @((publishing || uploading) ? "disabled" : "")">
+                    <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Color="Color.Primary" />
+                    <div>
+                        <MudText Typo="Typo.body2" Class="fw-semibold">Drop images, GIFs or video, or click to browse</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Each platform's limits are checked below; turn a platform off to skip it.</MudText>
+                    </div>
+                    <InputFile @key="inputKey" id="media-input" class="sp-dropzone-input" multiple aria-label="Add media"
+                               accept="@MediaAccept" OnChange="OnFilesSelectedAsync" disabled="@(publishing || uploading)" />
+                </div>
+
+                @if (uploading)
+                {
+                    <MudProgressLinear Indeterminate="true" Rounded="true" Class="mt-2" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Reading files…</MudText>
+                }
+
+                @foreach (var m in media)
+                {
+                    <MudPaper Outlined="true" Elevation="0" Class="pa-3 mt-2" Style="border-radius:14px">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@(m.Kind == MediaKind.Video ? Icons.Material.Filled.Videocam : Icons.Material.Filled.Image)" Color="Color.Secondary" />
+                            <MudText Typo="Typo.body2" Class="text-truncate fw-semibold">@m.FileName</MudText>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@m.Kind</MudChip>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@MediaRules.Size(m.Size)</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="ms-auto" Disabled="@publishing" OnClick="() => RemoveMedia(m)" aria-label="@($"Remove {m.FileName}")" />
+                        </div>
+                        @if (m.Kind != MediaKind.Video)
+                        {
+                            <MudTextField T="string" @bind-Value="m.AltText" Immediate="true" Label="Alt text" Placeholder="Describe the image for screen readers"
+                                          MaxLength="MediaRules.MaxAltTextLength" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                        }
+                    </MudPaper>
+                }
+
+                @if (notes.Count > 0)
+                {
+                    <MudStack Spacing="2" Class="mt-4">
+                        @foreach (var n in notes)
+                        {
+                            <MudAlert Severity="@(n.IsError ? Severity.Error : Severity.Info)" Variant="Variant.Outlined" Dense="true" ShowCloseIcon="true" CloseIconClicked="() => notes.Remove(n)" Class="text-break">@n.Text</MudAlert>
+                        }
+                    </MudStack>
+                }
+
+                @if (mentioned.Count > 0)
+                {
+                    <div class="sp-section-label mt-5 mb-2">Mentioned</div>
+                    <MudStack Spacing="2">
+                        @foreach (var c in mentioned)
+                        {
+                            var sv = searchViews.GetValueOrDefault(c.Id);
+                            var suggestions = sv?.Candidates.Count(x => c.MissingSearchablePlatforms().Contains(x.Platform)) ?? 0;
+                            <div>
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <Avatar Url="@c.AvatarUrl" Name="@c.DisplayName" Size="28" />
+                                    <MudText Typo="Typo.body2" Class="fw-semibold">@c.DisplayName</MudText>
+                                    <PlatformBadges Contact="c" />
+                                    @if (sv?.Status == AccountSearchStatus.Running)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default" OnClick="() => ToggleFinder(c.Id)">
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width:14px;height:14px" Class="me-2" /> finding accounts…
+                                        </MudButton>
+                                    }
+                                    else if (suggestions > 0)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ToggleFinder(c.Id)">
+                                            <span class="suggestion-dot"></span> @suggestions suggestion@(suggestions == 1 ? "" : "s")
+                                        </MudButton>
+                                    }
+                                    else if (c.MissingSearchablePlatforms().Count > 0 && finderSettings?.Enabled == true)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="() => ToggleFinder(c.Id)">find accounts</MudButton>
+                                    }
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Class="ms-auto" Href="@($"contacts?edit={c.Id}")" StartIcon="@Icons.Material.Outlined.Edit">edit</MudButton>
+                                </div>
+                                @if (expandedFinders.Contains(c.Id))
+                                {
+                                    <div class="mt-1 mb-2">
+                                        <AccountFinderPanel Contact="c" OnUse="cand => UseCandidateAsync(c, cand)" />
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </MudStack>
+                }
+            </div>
+            <div class="sp-card-footer">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="@(!CanPublish)" OnClick="PublishAsync"
+                           StartIcon="@(publishing ? null : Icons.Material.Filled.Send)">
+                    @if (publishing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" Color="Color.Inherit" />
+                    }
+                    Publish to @SelectedSummary
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="NewPostAsync" Disabled="@publishing" StartIcon="@Icons.Material.Filled.Refresh">New post</MudButton>
+            </div>
+        </MudPaper>
+
+        @if (results is not null)
+        {
+            <MudStack Spacing="2" Class="mt-4">
+                @foreach (var r in results)
+                {
+                    <MudAlert Severity="@(r.Success ? (r.OpensInBrowser ? Severity.Info : Severity.Success) : Severity.Error)" Variant="Variant.Outlined" Icon="@(r.OpensInBrowser && r.Success ? Icons.Material.Filled.OpenInNew : null)" Class="text-break">
+                        <MudText Typo="Typo.subtitle2">@PlatformInfo.Label(r.Platform)</MudText>
+                        @if (r.Success)
+                        {
+                            @if (r.OpensInBrowser)
+                            {
+                                <MudText Typo="Typo.body2">Opened in your browser with your post pre-filled — click <strong>Post</strong> there to finish.
+                                    <MudLink Href="@r.Url" Target="_blank">Open again</MudLink></MudText>
+                            }
+                            else
+                            {
+                                <MudLink Href="@r.Url" Target="_blank" Typo="Typo.body2">View post</MudLink>
+                            }
+                            @if (r.Platform == Platform.LinkedIn && ManualLinkedInTags.Count > 0)
+                            {
+                                <div class="mt-2">
+                                    <MudText Typo="Typo.subtitle2">Tag these by hand on LinkedIn</MudText>
+                                    <MudText Typo="Typo.body2" Class="mb-1">
+                                        LinkedIn doesn't let apps tag people. <MudLink Href="@r.Url" Target="_blank">Open your post</MudLink>, choose ⋯ ▸ Edit post,
+                                        then for each person: click <strong>Copy @@name</strong> below, delete their plain name in the post, paste, and pick
+                                        them from LinkedIn's own suggestion list so the tag is real.
+                                    </MudText>
+                                    @LinkedInChecklist
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="text-break">@r.Error</MudText>
+                        }
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+    </MudItem>
+
+    <MudItem xs="12" lg="7">
+        <MudStack Spacing="3">
+            @foreach (var d in drafts)
+            {
+                var rendered = Render(d);
+                var connected = status?.IsConnected(d.Platform) == true;
+                <MudPaper Class="@($"sp-card platform-{d.Platform.ToString().ToLowerInvariant()}")" Elevation="0">
+                    <div class="sp-card-header">
+                        <span class="platform-icon">@PlatformInfo.Icon(d.Platform)</span>
+                        <MudText Typo="Typo.h6">@PlatformInfo.Label(d.Platform)</MudText>
+                        @if (status is not null && !connected)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Href="settings">Not connected: copy only</MudChip>
+                        }
+                        @if (d.Override is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Customized</MudChip>
+                        }
+                        <MudText Typo="Typo.body2" Class="ms-auto fw-semibold" Color="@(rendered.IsOverLimit ? Color.Error : Color.Secondary)">
+                            @rendered.Length / @rendered.Limit
+                        </MudText>
+                    </div>
+                    <MudProgressLinear Value="@(Math.Min(100.0, 100.0 * rendered.Length / Math.Max(1, rendered.Limit)))" Size="Size.Small"
+                                       Color="@(rendered.IsOverLimit ? Color.Error : rendered.Length > rendered.Limit * 0.9 ? Color.Warning : Color.Primary)" />
+                    <div class="sp-card-body">
+                        @if (d.Override is not null)
+                        {
+                            <div class="mention-host mb-3">
+                                <textarea id="@d.EditorId" class="composer" rows="4" aria-label="@($"{PlatformInfo.Label(d.Platform)} text")"
+                                          @bind="d.Override" @bind:event="oninput" @bind:after="OnTemplatesChanged"></textarea>
+                                @if (activeEditor == d.EditorId)
+                                {
+                                    @MentionPopup
+                                }
+                            </div>
+                        }
+
+                        <div class="preview">@if (rendered.IsEmpty) { <span style="opacity:.5">Preview appears here</span> } else { @rendered.DisplayText }</div>
+
+                        @foreach (var w in rendered.Warnings.Distinct())
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true" Class="mt-1 pa-0">@w</MudAlert>
+                        }
+
+                        @if (media.Count > 0)
+                        {
+                            @foreach (var e in MediaRules.Validate(d.Platform, media))
+                            {
+                                <MudAlert Severity="Severity.Error" Variant="Variant.Text" Dense="true" Class="mt-1 pa-0">@e</MudAlert>
+                            }
+                            @if (d.Platform == Platform.X && xIntent && connected)
+                            {
+                                <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true" Class="mt-1 pa-0">X's browser composer can't receive files. Attach your media there before clicking Post.</MudAlert>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@MediaRules.Hint(d.Platform)</MudText>
+                        }
+
+                        <div class="d-flex align-center gap-2 mt-3 flex-wrap">
+                            <MudSwitch T="bool" Value="@(d.Selected && connected)" ValueChanged="@(async (bool v) => { d.Selected = v; await SaveDraftAsync(); })"
+                                       Disabled="@(!connected)" Color="Color.Primary" Label="Publish" />
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => CopyAsync(d, rendered)" Disabled="@rendered.IsEmpty"
+                                       StartIcon="@(d.Copied ? Icons.Material.Filled.Check : Icons.Material.Outlined.ContentCopy)">
+                                @(d.Copied ? "Copied" : "Copy text")
+                            </MudButton>
+                            @if (d.Override is null)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => Customize(d)" StartIcon="@Icons.Material.Outlined.Tune">Customize for @PlatformInfo.Label(d.Platform)</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => { d.Override = null; return OnTemplatesChanged(); }" StartIcon="@Icons.Material.Filled.Undo">Use shared text</MudButton>
+                            }
+                        </div>
+                        @if (d.Platform == Platform.LinkedIn)
+                        {
+                            @if (ManualLinkedInTags.Count > 0)
+                            {
+                                <div class="mt-3">
+                                    <MudText Typo="Typo.subtitle2">Tag by hand after posting</MudText>
+                                    @LinkedInChecklist
+                                </div>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">Copied text uses plain names. Publish tags contacts that have a LinkedIn URN (usually company pages).</MudText>
+                        }
+                    </div>
+                </MudPaper>
+            }
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private const string BaseId = "composer-base";
+
+    private sealed class PlatformDraft(Platform platform)
+    {
+        public Platform Platform { get; } = platform;
+        public string EditorId => $"composer-{Platform.ToString().ToLowerInvariant()}";
+        public string? Override { get; set; }
+        public bool Selected { get; set; } = true;
+        public bool Copied { get; set; }
+    }
+
+    private sealed record Note(string Text, bool IsError = false);
+
+    private readonly List<PlatformDraft> drafts = [new(Platform.X), new(Platform.Bluesky), new(Platform.LinkedIn)];
+    private readonly Dictionary<string, Contact> contactCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<Note> notes = [];
+    private List<Contact> mentioned = [];
+
+    private string baseTemplate = "";
+    private PlatformStatus? status;
+    private bool publishing;
+    private IReadOnlyList<PublishResult>? results;
+    private DotNetObjectReference<Home>? selfRef;
+
+    private string? activeEditor;
+    private string? mentionQuery;
+    private List<MentionCandidate> candidates = [];
+    private int selectedIndex;
+    private bool searching;
+    private CancellationTokenSource? searchCts;
+
+    private AccountFinderSettings? finderSettings;
+    private readonly Dictionary<int, AccountSearchView> searchViews = [];
+    private readonly HashSet<int> expandedFinders = [];
+    private readonly HashSet<int> taggedOnLinkedIn = [];
+    private int? copiedNameFor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        status = await Publisher.GetStatusAsync();
+        xIntent = await Publisher.IsXIntentEnabledAsync();
+        finderSettings = await Finder.GetSettingsAsync();
+        Searches.Changed += OnSearchChanged;
+    }
+
+    private List<Contact> ManualLinkedInTags
+    {
+        get
+        {
+            var li = drafts.First(d => d.Platform == Platform.LinkedIn);
+            return MentionTemplate.GetMentionKeys(TemplateFor(li))
+                .Select(k => contactCache.GetValueOrDefault(k))
+                .OfType<Contact>()
+                .Where(c => c.NeedsManualLinkedInTag)
+                .DistinctBy(c => c.Id)
+                .ToList();
+        }
+    }
+
+    private RenderFragment LinkedInChecklist => __builder =>
+    {
+        <MudStack Spacing="0">
+            @foreach (var c in ManualLinkedInTags)
+            {
+                var id = c.Id;
+                <div class="d-flex align-center flex-wrap gap-1">
+                    <MudCheckBox T="bool" Value="@taggedOnLinkedIn.Contains(id)" Size="Size.Small" Color="Color.Primary"
+                                 ValueChanged="@((bool v) => { if (v) taggedOnLinkedIn.Add(id); else taggedOnLinkedIn.Remove(id); })"
+                                 Label="@(c.LinkedInName ?? c.DisplayName)" Style="@(taggedOnLinkedIn.Contains(id) ? "text-decoration:line-through;opacity:.6" : null)" />
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CopyNameAsync(c)"
+                               StartIcon="@(copiedNameFor == id ? Icons.Material.Filled.Check : Icons.Material.Outlined.ContentCopy)">
+                        @(copiedNameFor == id ? "Copied" : "Copy @name")
+                    </MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Href="@c.LinkedInProfileUrl" Target="_blank" EndIcon="@Icons.Material.Filled.OpenInNew">profile</MudButton>
+                </div>
+            }
+        </MudStack>
+    };
+
+    private async Task CopyNameAsync(Contact c)
+    {
+        await JS.InvokeVoidAsync("socialPoster.copy", $"@{c.LinkedInName ?? c.DisplayName}");
+        copiedNameFor = c.Id;
+    }
+
+    private void OnSearchChanged(int contactId)
+    {
+        if (!mentioned.Any(c => c.Id == contactId)) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (await Searches.GetAsync(contactId) is { } v) searchViews[contactId] = v; else searchViews.Remove(contactId);
+            StateHasChanged();
+        });
+    }
+
+    private void ToggleFinder(int contactId)
+    {
+        if (!expandedFinders.Remove(contactId)) expandedFinders.Add(contactId);
+    }
+
+    private async Task UseCandidateAsync(Contact contact, AccountCandidate candidate)
+    {
+        var updated = await Contacts.ApplyCandidateAsync(contact.Id, candidate);
+        if (updated is null) return;
+
+        contactCache[updated.Key] = updated;
+        mentioned = mentioned.Select(m => m.Id == updated.Id ? updated : m).ToList();
+        notes.Add(new Note(candidate.Platform == Platform.X
+            ? $"Linked {updated.DisplayName} to @{candidate.Handle} on X."
+            : candidate.LinkedInUrn is not null
+                ? $"Linked {updated.DisplayName} to their LinkedIn page; it will be tagged when you publish."
+                : $"Saved {updated.DisplayName}'s LinkedIn profile. LinkedIn doesn't let apps tag people, so you'll get a checklist to tag them by hand after posting."));
+        if (updated.MissingSearchablePlatforms().Count == 0) expandedFinders.Remove(updated.Id);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        selfRef ??= DotNetObjectReference.Create(this);
+        if (firstRender && await JS.InvokeAsync<string?>("socialPoster.loadDraft") is { Length: > 0 } json)
+        {
+            RestoreDraft(json);
+            await OnTemplatesChanged();
+            StateHasChanged();
+            return;
+        }
+
+        var ids = drafts.Where(d => d.Override is not null).Select(d => d.EditorId).Prepend(BaseId).ToArray();
+        await JS.InvokeVoidAsync("socialPoster.attachAll", ids, selfRef);
+    }
+
+    private sealed record SavedDraft(string Base, Dictionary<Platform, string?> Overrides, Dictionary<Platform, bool> Selected);
+
+    private void RestoreDraft(string json)
+    {
+        try
+        {
+            var saved = System.Text.Json.JsonSerializer.Deserialize<SavedDraft>(json);
+            if (saved is null) return;
+            baseTemplate = saved.Base;
+            foreach (var d in drafts)
+            {
+                d.Override = saved.Overrides.GetValueOrDefault(d.Platform);
+                d.Selected = saved.Selected.GetValueOrDefault(d.Platform, true);
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+    }
+
+    private ValueTask SaveDraftAsync() => JS.InvokeVoidAsync("socialPoster.saveDraft", System.Text.Json.JsonSerializer.Serialize(
+        new SavedDraft(baseTemplate, drafts.ToDictionary(d => d.Platform, d => d.Override), drafts.ToDictionary(d => d.Platform, d => d.Selected))));
+
+    private string TemplateFor(PlatformDraft d) => d.Override ?? baseTemplate;
+
+    private RenderedPost Render(PlatformDraft d) => PostRenderer.Render(d.Platform, TemplateFor(d), key => contactCache.GetValueOrDefault(key));
+
+    private IEnumerable<PlatformDraft> Publishable => drafts.Where(d => d.Selected && status?.IsConnected(d.Platform) == true);
+
+    private bool CanPublish => !publishing && !uploading && Publishable.Any()
+        && Publishable.All(d => Render(d) is { IsEmpty: false, IsOverLimit: false } && MediaRules.Validate(d.Platform, media).Count == 0);
+
+    private static readonly string MediaAccept = string.Join(",", MediaRules.AcceptedExtensions);
+    private const int MaxFilesPerPick = 20;
+
+    private readonly List<MediaAttachment> media = [];
+    private bool uploading;
+    private bool xIntent;
+    private int inputKey;
+
+    private async Task OnFilesSelectedAsync(InputFileChangeEventArgs e)
+    {
+        uploading = true;
+        results = null;
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "SocialPoster", "uploads");
+            Directory.CreateDirectory(dir);
+
+            foreach (var file in e.GetMultipleFiles(MaxFilesPerPick))
+            {
+                if (!MediaRules.TryClassify(file.Name, out var kind, out var contentType))
+                {
+                    notes.Add(new Note($"{file.Name}: unsupported file type. Use {string.Join(", ", MediaRules.AcceptedExtensions)}.", true));
+                    continue;
+                }
+
+                if (file.Size > MediaRules.MaxFileSize)
+                {
+                    notes.Add(new Note($"{file.Name} is {MediaRules.Size(file.Size)}; the largest file any platform accepts is {MediaRules.Size(MediaRules.MaxFileSize)}.", true));
+                    continue;
+                }
+
+                var path = Path.Combine(dir, Guid.NewGuid().ToString("N") + Path.GetExtension(file.Name).ToLowerInvariant());
+                try
+                {
+                    await using var input = file.OpenReadStream(MediaRules.MaxFileSize);
+                    await using var output = File.Create(path);
+                    await input.CopyToAsync(output);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    TryDelete(path);
+                    notes.Add(new Note($"Couldn't read {file.Name}: {ex.Message}", true));
+                    continue;
+                }
+
+                media.Add(new MediaAttachment { FileName = file.Name, Kind = kind, ContentType = contentType, Size = file.Size, Path = path });
+            }
+        }
+        finally
+        {
+            uploading = false;
+            inputKey++; // fresh <InputFile> so the same file can be picked again after removing it
+        }
+    }
+
+    private void RemoveMedia(MediaAttachment m)
+    {
+        media.Remove(m);
+        TryDelete(m.Path);
+        results = null;
+    }
+
+    private void ClearMedia()
+    {
+        foreach (var m in media) TryDelete(m.Path);
+        media.Clear();
+    }
+
+    private static void TryDelete(string? path)
+    {
+        try
+        {
+            if (path is not null) File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private string SelectedSummary
+    {
+        get
+        {
+            var list = Publishable.Select(d => PlatformInfo.Label(d.Platform)).ToList();
+            return list.Count == 0 ? "(connect an account)" : string.Join(", ", list);
+        }
+    }
+
+    private async Task OnTemplatesChanged()
+    {
+        results = null;
+        foreach (var d in drafts) d.Copied = false;
+
+        var keys = drafts.Select(TemplateFor).Append(baseTemplate).SelectMany(MentionTemplate.GetMentionKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var missing = keys.Where(k => !contactCache.ContainsKey(k)).ToList();
+        if (missing.Count > 0)
+        {
+            foreach (var (k, c) in await Contacts.GetByKeysAsync(missing)) contactCache[k] = c;
+        }
+
+        mentioned = keys.Select(k => contactCache.GetValueOrDefault(k)).OfType<Contact>().DistinctBy(c => c.Id).ToList();
+        foreach (var c in mentioned.Where(c => !searchViews.ContainsKey(c.Id)))
+        {
+            await Searches.StartIfNeededAsync(c);
+            if (await Searches.GetAsync(c.Id) is { } v) searchViews[c.Id] = v;
+        }
+
+        await SaveDraftAsync();
+    }
+
+    private async Task Customize(PlatformDraft d)
+    {
+        d.Override = baseTemplate;
+        await SaveDraftAsync();
+    }
+
+    /// <summary>Fully resets the compose page back to its just-loaded state: text, per-platform overrides and
+    /// selection, publish results, mention/search state, and the saved draft — as if the page were freshly opened.</summary>
+    private async Task NewPostAsync()
+    {
+        await CloseMentionAsync();
+
+        baseTemplate = "";
+        foreach (var d in drafts) { d.Override = null; d.Copied = false; d.Selected = true; }
+        results = null;
+        ClearMedia();
+        mentioned = [];
+        notes.Clear();
+        searchViews.Clear();
+        expandedFinders.Clear();
+        taggedOnLinkedIn.Clear();
+        copiedNameFor = null;
+
+        await SaveDraftAsync();
+        await JS.InvokeVoidAsync("socialPoster.scrollToTop");
+    }
+
+    private async Task CopyAsync(PlatformDraft d, RenderedPost rendered)
+    {
+        await JS.InvokeVoidAsync("socialPoster.copy", rendered.DisplayText);
+        foreach (var other in drafts) other.Copied = false;
+        d.Copied = true;
+    }
+
+    private async Task PublishAsync()
+    {
+        publishing = true;
+        results = null;
+        try
+        {
+            var templates = Publishable.ToDictionary(d => d.Platform, TemplateFor);
+            results = await Publisher.PublishAsync(baseTemplate, templates, media.ToList());
+
+            var li = results.FirstOrDefault(r => r.Platform == Platform.LinkedIn && r.Success && r.Url is not null);
+            if (li is not null && ManualLinkedInTags.Count > 0)
+            {
+                var opened = await JS.InvokeAsync<bool>("socialPoster.openInNewTab", li.Url);
+                if (!opened)
+                {
+                    notes.Add(new Note("Your browser blocked the LinkedIn post from opening automatically. Use \"View post\" above to tag people by hand."));
+                }
+            }
+
+            var xIntent = results.FirstOrDefault(r => r.Platform == Platform.X && r.Success && r.OpensInBrowser && r.Url is not null);
+            if (xIntent is not null)
+            {
+                var opened = await JS.InvokeAsync<bool>("socialPoster.openInNewTab", xIntent.Url);
+                if (!opened)
+                {
+                    notes.Add(new Note("Your browser blocked X from opening automatically. Use \"Open again\" above to finish your post."));
+                }
+            }
+        }
+        finally
+        {
+            publishing = false;
+        }
+    }
+
+    // ---- Mention autocomplete ----
+
+    [JSInvokable]
+    public async Task OnMentionQuery(string editorId, string? query)
+    {
+        searchCts?.Cancel();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            await CloseMentionAsync();
+            return;
+        }
+
+        var cts = searchCts = new CancellationTokenSource();
+        var wasOpen = activeEditor is not null;
+        activeEditor = editorId;
+        mentionQuery = query;
+        searching = true;
+        selectedIndex = 0;
+        if (!wasOpen) candidates = [];
+        await JS.InvokeVoidAsync("socialPoster.setOpen", editorId, true);
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Task.Delay(200, cts.Token);
+            var found = await Contacts.SearchAsync(query, status?.X == true, cts.Token);
+            if (finderSettings?.Enabled == true && query.Trim().Length >= 2)
+            {
+                found.Add(new MentionCandidate(CandidateKind.AgentSearch, $"Find “{query.Trim()}” with Copilot",
+                    "Not on Bluesky? Search the web for their X and LinkedIn accounts", null));
+            }
+            if (!cts.IsCancellationRequested)
+            {
+                candidates = found;
+                searching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            searching = false;
+            notes.Add(new Note($"Search failed: {ex.Message}", true));
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnMentionKey(string editorId, string key)
+    {
+        switch (key)
+        {
+            case "ArrowDown" when candidates.Count > 0:
+                selectedIndex = (selectedIndex + 1) % candidates.Count;
+                break;
+            case "ArrowUp" when candidates.Count > 0:
+                selectedIndex = (selectedIndex - 1 + candidates.Count) % candidates.Count;
+                break;
+            case "Enter" or "Tab" when candidates.Count > 0:
+                await ChooseAsync(candidates[Math.Clamp(selectedIndex, 0, candidates.Count - 1)]);
+                return;
+            case "Escape":
+            case "Enter" or "Tab":
+                await CloseMentionAsync();
+                return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ChooseAsync(MentionCandidate candidate)
+    {
+        var editor = activeEditor;
+        if (editor is null) return;
+        searching = true;
+        StateHasChanged();
+
+        try
+        {
+            if (candidate.Kind == CandidateKind.AgentSearch)
+            {
+                var created = await Contacts.CreateFromNameAsync(mentionQuery ?? "");
+                contactCache[created.Key] = created;
+                Searches.Start(created);
+                expandedFinders.Add(created.Id);
+                notes.Add(new Note($"Saved {created.DisplayName} as {{@{created.Key}}}. Copilot is searching for their accounts; pick the right ones below."));
+                await CloseMentionAsync();
+                await JS.InvokeVoidAsync("socialPoster.insertMention", editor, created.Key);
+                return;
+            }
+
+            var result = await Contacts.EnsureAsync(candidate);
+            if (result is null)
+            {
+                notes.Add(new Note($"Couldn't find @{candidate.XUsername} on X.", true));
+                await CloseMentionAsync();
+                return;
+            }
+
+            contactCache[result.Contact.Key] = result.Contact;
+            if (result.Created) notes.Add(new Note($"Saved {result.Contact.DisplayName} as {{@{result.Contact.Key}}}."));
+            notes.AddRange(result.Notes.Select(n => new Note($"{result.Contact.DisplayName}: {n}")));
+
+            await CloseMentionAsync();
+            await JS.InvokeVoidAsync("socialPoster.insertMention", editor, result.Contact.Key);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            notes.Add(new Note(ex.Message, true));
+            await CloseMentionAsync();
+        }
+    }
+
+    private async Task CloseMentionAsync()
+    {
+        searchCts?.Cancel();
+        if (activeEditor is not null)
+        {
+            await JS.InvokeVoidAsync("socialPoster.setOpen", activeEditor, false);
+        }
+
+        activeEditor = null;
+        mentionQuery = null;
+        candidates = [];
+        searching = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private RenderFragment MentionPopup => __builder =>
+    {
+        <div class="mention-popup" role="listbox">
+            <div class="mention-header">
+                <span>Mention “@mentionQuery”</span>
+                @if (searching)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width:14px;height:14px" />
+                }
+            </div>
+            @if (!searching && candidates.Count == 0)
+            {
+                <div class="px-4 py-3"><MudText Typo="Typo.body2" Color="Color.Secondary">No matches. <MudLink Href="@($"contacts?new={mentionQuery}")">Add a contact manually</MudLink></MudText></div>
+            }
+            @for (var i = 0; i < candidates.Count; i++)
+            {
+                var c = candidates[i];
+                var index = i;
+                <div class="mention-item @(index == selectedIndex ? "active" : "")" role="option"
+                     @onmousedown="() => ChooseAsync(c)" @onmousedown:preventDefault="true"
+                     @onmouseenter="() => selectedIndex = index">
+                    @if (c.Kind == CandidateKind.XLookup)
+                    {
+                        <span class="avatar avatar-placeholder" style="width:36px;height:36px;background:#111">𝕏</span>
+                    }
+                    else if (c.Kind == CandidateKind.AgentSearch)
+                    {
+                        <span class="avatar avatar-placeholder" style="width:36px;height:36px"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /></span>
+                    }
+                    else
+                    {
+                        <Avatar Url="@c.AvatarUrl" Name="@c.Title" Size="36" />
+                    }
+                    <div class="min-w-0">
+                        <div class="d-flex align-center gap-1">
+                            <MudText Typo="Typo.body2" Class="fw-semibold text-truncate">@c.Title</MudText>
+                            @if (c.Kind == CandidateKind.Saved)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">saved</MudChip>
+                            }
+                        </div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate d-block">@c.Subtitle</MudText>
+                    </div>
+                </div>
+            }
+        </div>
+    };
+
+    public void Dispose()
+    {
+        Searches.Changed -= OnSearchChanged;
+        searchCts?.Cancel();
+        ClearMedia();
+        selfRef?.Dispose();
+    }
+}

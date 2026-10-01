@@ -1,0 +1,10 @@
+﻿<span class="platform-badges">
+    <span class="pbadge @(Contact.HasIdentity(Platform.X) ? "on" : "off")" title="@(Contact.XUsername is null ? "No X account" : "@" + Contact.XUsername)">𝕏</span>
+    <span class="pbadge @(Contact.HasIdentity(Platform.Bluesky) ? "on" : "off")" title="@(Contact.BlueskyHandle is null ? "No Bluesky account" : "@" + Contact.BlueskyHandle)">🦋</span>
+    <span class="pbadge @(Contact.HasIdentity(Platform.LinkedIn) ? "on" : Contact.NeedsManualLinkedInTag ? "partial" : "off")"
+          title="@(Contact.LinkedInUrn ?? (Contact.NeedsManualLinkedInTag ? "LinkedIn profile known; tag by hand after posting" : "No LinkedIn account"))">in</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+}

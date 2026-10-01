@@ -1,0 +1,9 @@
+@if (!string.IsNullOrEmpty(Text))
+{
+    <MudAlert Severity="@(IsError ? Severity.Error : Severity.Success)" Dense="true" Variant="Variant.Outlined" Class="mt-3 text-break">@Text</MudAlert>
+}
+
+@code {
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public bool IsError { get; set; }
+}

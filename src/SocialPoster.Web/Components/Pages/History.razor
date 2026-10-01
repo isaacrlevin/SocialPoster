@@ -1,0 +1,66 @@
+@page "/history"
+@inject PublishService Publisher
+
+<PageTitle>History · SocialPoster</PageTitle>
+
+<PageHeader Title="History" Subtitle="Everything you've published from here." />
+
+@if (history is null)
+{
+    <MudProgressLinear Indeterminate="true" Rounded="true" />
+}
+else if (history.Count == 0)
+{
+    <MudPaper Class="sp-card pa-10 d-flex flex-column align-center text-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.History" Style="font-size:3rem" Color="Color.Primary" />
+        <MudText Typo="Typo.h6" Class="mt-2">Nothing published yet</MudText>
+        <MudText Color="Color.Secondary">Posts you publish will show up here with a link to each platform.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudStack Spacing="3">
+        @foreach (var (entry, results) in history)
+        {
+            <MudPaper Class="sp-card" Elevation="0">
+                <div class="sp-card-header">
+                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" Color="Color.Secondary" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@entry.CreatedAtUtc.ToLocalTime().ToString("f")</MudText>
+                    <span class="ms-auto d-flex gap-1">
+                        @foreach (var r in results)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="@(r.Success ? Color.Success : Color.Error)" Variant="Variant.Outlined">@PlatformInfo.Label(r.Platform)</MudChip>
+                        }
+                    </span>
+                </div>
+                <div class="sp-card-body">
+                    <div class="preview mb-3">@entry.Template</div>
+                    <MudStack Spacing="1">
+                        @foreach (var r in results)
+                        {
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@(r.Success ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)"
+                                         Color="@(r.Success ? Color.Success : Color.Error)" Size="Size.Small" />
+                                <MudText Typo="Typo.body2" Class="fw-semibold">@PlatformInfo.Label(r.Platform)</MudText>
+                                @if (r.Success)
+                                {
+                                    <MudLink Href="@r.Url" Target="_blank" Typo="Typo.body2">View post</MudLink>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Error" Class="text-break">@r.Error</MudText>
+                                }
+                            </div>
+                        }
+                    </MudStack>
+                </div>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private List<(SocialPoster.Web.Data.PostHistoryEntry Entry, PublishResult[] Results)>? history;
+
+    protected override async Task OnInitializedAsync() => history = await Publisher.GetHistoryAsync();
+}

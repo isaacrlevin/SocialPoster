@@ -1,0 +1,164 @@
+@implements IDisposable
+@inject AccountSearchService Searches
+@inject AccountFinder Finder
+
+<div class="finder">
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" Color="Color.Primary" />
+        <MudText Typo="Typo.subtitle2">Find on X &amp; LinkedIn</MudText>
+        @if (view?.Status == AccountSearchStatus.Running)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="finder-progress text-truncate" Style="max-width:26rem">@view.Progress</MudText>
+        }
+        else if (view?.CompletedAtUtc is { } done)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary">searched @Ago(done)</MudText>
+        }
+        <div class="ms-auto d-flex gap-2">
+            @if (view?.Status != AccountSearchStatus.Running)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => showRefine = !showRefine">@(showRefine ? "Hide" : "Refine")</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Search" Disabled="@(Contact.Id == 0 || settings?.Enabled == false)">
+                    @(view is null ? "Search with Copilot" : "Search again")
+                </MudButton>
+            }
+        </div>
+    </div>
+
+    @if (Contact.Id == 0)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">Save the contact first.</MudText>
+    }
+    else if (settings?.Enabled == false)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">The Copilot account finder is turned off. <MudLink Href="settings">Turn it on under Accounts</MudLink>.</MudText>
+    }
+
+    @if (showRefine)
+    {
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="5">
+                <MudTextField T="string" @bind-Value="name" Label="Full name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="7">
+                <MudTextField T="string" @bind-Value="context" Label="Hints" Placeholder="Employer, role, city… (e.g. CEO of Contoso)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+    }
+
+    @if (view?.Status == AccountSearchStatus.Failed)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Variant="Variant.Outlined" Class="mt-2 text-break">@view.Error</MudAlert>
+    }
+
+    @if (view is { Status: not AccountSearchStatus.Running } && view.Candidates.Count == 0 && view.Status == AccountSearchStatus.Done)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">No accounts found for “@view.Query”. Try Refine with a full name or employer.</MudText>
+    }
+
+    @if (view is not null && view.Candidates.Count > 0)
+    {
+        <div class="mt-2">
+            @foreach (var c in view.Candidates)
+            {
+                var inUse = IsInUse(c);
+                <div class="finder-candidate">
+                    <span class="pbadge on flex-shrink-0">@(c.Platform == Platform.X ? "𝕏" : "in")</span>
+                    <div class="min-w-0 flex-grow-1">
+                        <div class="d-flex align-center flex-wrap gap-1">
+                            <MudText Typo="Typo.body2" Class="fw-semibold">@(c.Name ?? c.Handle)</MudText>
+                            <MudLink Href="@c.Url" Target="_blank" Typo="Typo.body2">@(c.Platform == Platform.X ? "@" + c.Handle : ShortUrl(c))</MudLink>
+                            @if (c.Kind == AccountKind.Organization)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">company@(c.OrganizationId is null ? "" : " · taggable")</MudChip>
+                            }
+                            <MudTooltip Text="Copilot's confidence">
+                                <MudChip T="string" Size="Size.Small" Color="@ConfidenceColor(c.Confidence)" Variant="Variant.Filled">@c.Confidence%</MudChip>
+                            </MudTooltip>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(c.Reason))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@c.Reason</MudText>
+                        }
+                    </div>
+                    <div class="d-flex gap-1 flex-shrink-0 align-center">
+                        @if (inUse)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check">in use</MudChip>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => OnUse.InvokeAsync(c)">Use</MudButton>
+                            <MudTooltip Text="Not them">
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="() => Searches.DismissAsync(Contact.Id, c)" aria-label="Not them" />
+                            </MudTooltip>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">Check the profile before using it: results come from a web search and can be wrong.</MudText>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+    [Parameter] public EventCallback<AccountCandidate> OnUse { get; set; }
+
+    private AccountSearchView? view;
+    private AccountFinderSettings? settings;
+    private bool showRefine;
+    private string? name;
+    private string? context;
+    private int loadedFor = -1;
+
+    protected override void OnInitialized() => Searches.Changed += OnChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        settings ??= await Finder.GetSettingsAsync();
+        if (loadedFor != Contact.Id)
+        {
+            loadedFor = Contact.Id;
+            name = Contact.DisplayName;
+            context = null;
+            view = Contact.Id == 0 ? null : await Searches.GetAsync(Contact.Id);
+        }
+    }
+
+    private void OnChanged(int contactId)
+    {
+        if (contactId != Contact.Id) return;
+        _ = InvokeAsync(async () =>
+        {
+            view = await Searches.GetAsync(contactId);
+            StateHasChanged();
+        });
+    }
+
+    private void Search()
+    {
+        Searches.Start(Contact, name, context);
+        showRefine = false;
+    }
+
+    private bool IsInUse(AccountCandidate c) => c.Platform == Platform.X
+        ? string.Equals(Contact.XUsername, c.Handle, StringComparison.OrdinalIgnoreCase)
+        : string.Equals(Contact.LinkedInProfileUrl?.TrimEnd('/'), c.Url, StringComparison.OrdinalIgnoreCase);
+
+    private static string ShortUrl(AccountCandidate c) => c.Url.Replace("https://www.linkedin.com/", "");
+
+    private static Color ConfidenceColor(int c) => c >= 85 ? Color.Success : c >= 60 ? Color.Primary : Color.Default;
+
+    private static string Ago(DateTime utc)
+    {
+        var span = DateTime.UtcNow - utc;
+        return span.TotalMinutes < 1 ? "just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+            : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago"
+            : $"{(int)span.TotalDays} d ago";
+    }
+
+    public void Dispose() => Searches.Changed -= OnChanged;
+}

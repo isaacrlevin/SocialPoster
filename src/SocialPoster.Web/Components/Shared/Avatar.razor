@@ -1,0 +1,17 @@
+﻿@if (!string.IsNullOrWhiteSpace(Url))
+{
+    <img class="avatar" src="@Url" alt="" width="@Size" height="@Size" style="width:@(Size)px;height:@(Size)px" referrerpolicy="no-referrer" loading="@(Lazy ? "lazy" : "eager")" onerror="this.style.visibility='hidden'" />
+}
+else
+{
+    <span class="avatar avatar-placeholder" style="width:@(Size)px;height:@(Size)px;font-size:@(Size * 0.45)px">@Initial</span>
+}
+
+@code {
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public int Size { get; set; } = 32;
+    [Parameter] public bool Lazy { get; set; }
+
+    private string Initial => string.IsNullOrWhiteSpace(Name) ? "?" : char.ToUpperInvariant(Name.Trim()[0]).ToString();
+}

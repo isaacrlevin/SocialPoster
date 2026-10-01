@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SocialPoster: write one post, publish to X, Bluesky and LinkedIn</title>
+  <meta name="description" content="A local Blazor app that publishes one post to X, Bluesky and LinkedIn with mentions converted correctly for each platform. Setup guide and documentation.">
+  <meta property="og:title" content="SocialPoster">
+  <meta property="og:description" content="Write one post and publish it to X, Bluesky and LinkedIn, with mentions converted correctly for each platform.">
+  <meta property="og:image" content="img/compose.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b5bf0'/%3E%3Cpath d='M8 16l16-7-5 14-3-6z' fill='white'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="hero">
+  <div class="logo" aria-hidden="true">➤</div>
+  <h1>SocialPoster</h1>
+  <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong> and <strong>LinkedIn</strong>, with @-mentions converted correctly for each platform.</p>
+  <div class="btns">
+    <a class="btn primary" href="#quick-start">Get started</a>
+    <a class="btn" href="https://github.com/isaacrlevin/SocialPoster">View on GitHub</a>
+  </div>
+  <div class="hero-shot"><img src="img/compose.png" alt="The Compose page with a draft post and a live preview for X, Bluesky and LinkedIn"></div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Table of contents">
+    <strong>On this page</strong>
+    <a href="#features">Features</a>
+    <a href="#quick-start">Quick start</a>
+    <a href="#connect">Connect accounts</a>
+    <a class="sub" href="#bluesky">Bluesky</a>
+    <a class="sub" href="#x">X</a>
+    <a class="sub" href="#linkedin">LinkedIn</a>
+    <a class="sub" href="#copilot">Copilot finder</a>
+    <a href="#using">Using the app</a>
+    <a class="sub" href="#mentions">Mentions</a>
+    <a class="sub" href="#media">Images, GIFs &amp; video</a>
+    <a class="sub" href="#import">Import Bluesky contacts</a>
+    <a class="sub" href="#contacts">Managing contacts</a>
+    <a href="#screenshots">Screenshots</a>
+    <a href="#config">Configuration</a>
+    <a href="#security">Security</a>
+    <a href="#limits">Limitations</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <main>
+
+    <section id="features">
+      <h2>Features</h2>
+      <div class="cards">
+        <div class="card"><h3>One post, three platforms</h3><p>Write once. Each platform gets its own live preview with an accurate character counter.</p></div>
+        <div class="card"><h3>Mentions that work</h3><p>Type <kbd>@</kbd> to find someone. They're tagged properly on each platform, using their real identity there.</p></div>
+        <div class="card"><h3>Images, GIFs &amp; video</h3><p>Attach media with per-platform limit checks and alt text. Works for LinkedIn, Bluesky and X.</p></div>
+        <div class="card"><h3>Import your contacts</h3><p>Pull in everyone you follow on Bluesky with one click, then fill in their X and LinkedIn accounts.</p></div>
+        <div class="card"><h3>Copilot account finder</h3><p>An optional GitHub Copilot agent searches the web for someone's X and LinkedIn accounts.</p></div>
+        <div class="card"><h3>Local and private</h3><p>Runs on your computer. Credentials are encrypted in a local SQLite database and never leave it.</p></div>
+      </div>
+      <p>SocialPoster is a Blazor Server app on .NET 10 with a MudBlazor UI (light and dark themes). It works on Windows, Linux and macOS.</p>
+    </section>
+
+    <section id="quick-start">
+      <h2>Quick start</h2>
+      <h3>Prerequisites</h3>
+      <ul>
+        <li>The <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 SDK</a></li>
+        <li>Git</li>
+        <li><em>Optional:</em> the <a href="https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli">GitHub Copilot CLI</a> (or a GitHub token) for the account finder</li>
+      </ul>
+      <h3>Run it</h3>
+<pre><code>git clone https://github.com/isaacrlevin/SocialPoster.git
+cd SocialPoster/src/SocialPoster.Web
+dotnet run --launch-profile http</code></pre>
+      <p>Open <a href="http://localhost:5184">http://localhost:5184</a>. The database is created automatically on first run, so there is no migration or setup step.</p>
+      <div class="note">
+        <strong>Try it with nothing connected</strong>
+        <p>Bluesky search and <em>Copy text</em> work without any account. Connect the platforms you want to publish to on the <em>Accounts</em> page.</p>
+      </div>
+      <p>To run the tests, use <code>dotnet test</code> from the repository root. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>.</p>
+    </section>
+
+    <section id="connect">
+      <h2>Connect your accounts</h2>
+      <p>Open <strong>Accounts</strong> in the sidebar. You only need to connect the platforms you want to publish to; the rest stay "copy only".</p>
+      <figure><img src="img/accounts.png" alt="The Accounts page with cards for Bluesky, X, LinkedIn and the Copilot finder" loading="lazy"><figcaption>The Accounts page</figcaption></figure>
+
+      <h3 id="bluesky"><span class="platform p-bsky">🦋</span>Bluesky</h3>
+      <ol class="steps">
+        <li>In Bluesky go to <strong>Settings → Privacy and security → App passwords</strong> and create one. Never use your main password.</li>
+        <li>On the Accounts page enter your handle (for example <code>you.bsky.social</code>) and the app password, then click <strong>Save</strong>.</li>
+        <li>Click <strong>Test login</strong> to confirm. If you're not on <code>bsky.social</code>, set your PDS under <em>Advanced</em>.</li>
+      </ol>
+      <p>Searching for people and importing your follows only needs your handle, not a password.</p>
+
+      <h3 id="x"><span class="platform p-x">𝕏</span>X</h3>
+      <p>There are two ways to post to X.</p>
+      <p><strong>Option A: browser (free).</strong> Turn on <em>Post via browser instead</em> in the X card and save. Publishing then opens <code>x.com/intent/post</code> in a new tab with your text pre-filled, and you click <strong>Post</strong> yourself. No API access or credentials are needed. This route can't attach media files.</p>
+      <p><strong>Option B: X API (paid plan required).</strong></p>
+      <ol class="steps">
+        <li>Create a project and app in the <a href="https://developer.x.com/en/portal/dashboard">X developer portal</a>.</li>
+        <li>Set the app's permissions to <strong>Read and write</strong>.</li>
+        <li>Generate an <strong>Access Token and Secret</strong> for your account. Do this <em>after</em> setting permissions, or the tokens will be read-only.</li>
+        <li>Enter the API key, API key secret, access token and access token secret, then <strong>Save</strong> and <strong>Test</strong>. The app uses OAuth 1.0a user context.</li>
+      </ol>
+      <div class="note warn">
+        <strong>X API costs</strong>
+        <p>Free X API tiers don't allow posting, and each username lookup counts against your plan. The credentials are also used by the <em>Verify</em> button in the contact editor.</p>
+      </div>
+
+      <h3 id="linkedin"><span class="platform p-li">in</span>LinkedIn: get an access token</h3>
+      <p>LinkedIn doesn't offer a "sign in and post" option for personal tools, so you create a small developer app and generate an access token for yourself. It's free and takes about five minutes. LinkedIn occasionally renames things in its portal, so labels may differ slightly.</p>
+      <ol class="steps">
+        <li><strong>Create an app.</strong> Go to the <a href="https://www.linkedin.com/developers/apps">LinkedIn Developer Portal</a> and click <strong>Create app</strong>. Give it a name (for example "SocialPoster"), pick a <strong>LinkedIn Page</strong> to associate it with (create a free placeholder page if you don't have one), upload any logo, accept the terms and create it. If LinkedIn asks you to verify the app against the page, use <em>Settings → Verify</em> and have a page admin (usually you) approve it.</li>
+        <li><strong>Request the products.</strong> On the <em>Products</em> tab request both of these. They're self-serve and normally approved immediately:
+          <ul>
+            <li><strong>Share on LinkedIn</strong>, which grants <code>w_member_social</code> and is needed to post</li>
+            <li><strong>Sign In with LinkedIn using OpenID Connect</strong>, which grants <code>openid</code> and <code>profile</code> and is used to find out who you are</li>
+          </ul>
+        </li>
+        <li><strong>Generate a token.</strong> Open the <a href="https://www.linkedin.com/developers/tools/oauth/token-generation">OAuth token generator</a>, choose your app, tick the scopes <code>openid</code>, <code>profile</code> and <code>w_member_social</code>, and click <strong>Request access token</strong>. Sign in and allow access.</li>
+        <li><strong>Copy the token.</strong> It's a long string that usually starts with <code>AQ</code>.</li>
+        <li><strong>Paste it into SocialPoster.</strong> Go to <em>Accounts → LinkedIn</em>, paste it into <strong>Access token</strong> and click <strong>Save</strong>. The app verifies it with LinkedIn and shows "Connected as <em>your name</em>".</li>
+        <li><strong>Fix version errors if they appear.</strong> If LinkedIn rejects posts with a version error, change the <em>API version</em> field (format <code>YYYYMM</code>) to a more recent month.</li>
+      </ol>
+      <div class="note warn">
+        <strong>Tokens expire</strong>
+        <p>LinkedIn access tokens last about <strong>60 days</strong>. When posting starts failing with an authorization error, repeat steps 3 to 5 to generate a fresh one. SocialPoster uses the token as-is: it never requests or revokes tokens, and <em>Forget token</em> only deletes the local copy.</p>
+      </div>
+      <p>Prefer to run the standard OAuth flow yourself? Add <code>http://localhost</code> as a redirect URL on the app's <em>Auth</em> tab and exchange the code for a token. Any token with the same three scopes works.</p>
+
+      <h3 id="copilot">✨ Copilot account finder (optional)</h3>
+      <p>A GitHub Copilot agent can search the web for someone's X and LinkedIn accounts and suggest matches. It's useful because LinkedIn has no member search and X lookups cost API requests.</p>
+      <ul>
+        <li>It uses the account you signed into with <code>copilot login</code>. On Windows the app reads the CLI's saved token from Credential Manager. On Linux and macOS set <code>GH_TOKEN</code> or <code>GITHUB_TOKEN</code>, or paste a token under <em>Accounts → Copilot account finder</em>.</li>
+        <li>Click <strong>Test connection</strong> to check it and list the models available to you. The default is <code>claude-haiku-4.5</code>; a search takes about 30 to 45 seconds and uses Copilot premium requests.</li>
+        <li>Searches can run on demand or automatically (once per contact). Turn off the automatic search in the same card.</li>
+      </ul>
+    </section>
+
+    <section id="using">
+      <h2>Using the app</h2>
+      <h3 id="mentions">Writing and mentioning people</h3>
+      <p>Write your post and type <kbd>@</kbd> to find people. A mention is stored as a platform-neutral token such as <code>{@grace}</code> that points to a <em>contact</em>, which holds that person's identity on each platform. Each preview shows the result for that platform, with a character counter and any warnings.</p>
+      <table>
+        <tr><th>Platform</th><th>What's posted</th><th>Needs</th></tr>
+        <tr><td>X</td><td><code>@username</code></td><td>X username</td></tr>
+        <tr><td>Bluesky</td><td><code>@handle</code> plus a real mention facet</td><td>Handle / DID</td></tr>
+        <tr><td>LinkedIn</td><td><code>@[Name](urn:li:…)</code> in the post text</td><td>Exact LinkedIn name and URN</td></tr>
+      </table>
+      <p>If a contact has no account on a platform, their plain name is used and the preview shows a warning. You can override the text for any platform with <em>Customize</em>.</p>
+      <ul>
+        <li><strong>X</strong> counts emoji and CJK characters as 2, and every link as a fixed 23 characters.</li>
+        <li><strong>Bluesky</strong> shortens links the way the official app does, stores the full URL as the link target, and attaches a link-preview card when the post contains a link.</li>
+        <li><strong>LinkedIn people</strong> can't be tagged by apps without partner access. After publishing, a <em>Tag by hand</em> checklist lists each person with a copy button and their profile link. Company pages with a numeric ID are tagged automatically.</li>
+      </ul>
+
+      <h3 id="media">Images, GIFs and video</h3>
+      <p>Drop files onto the <strong>Media</strong> area under the post box, or click to browse. Each platform's limits are checked live in its preview card, and you can switch a platform off to skip it. Add alt text to images for screen readers.</p>
+      <table>
+        <tr><th>Platform</th><th>Images</th><th>GIFs</th><th>Video</th></tr>
+        <tr><td><span class="platform p-li">in</span>LinkedIn</td><td>Up to 20 (JPG/PNG, 10 MB each)</td><td>1 (10 MB)</td><td>1 (MP4, 75 KB to 500 MB, 3 s to 30 min)</td></tr>
+        <tr><td><span class="platform p-bsky">🦋</span>Bluesky</td><td>Up to 4 (JPG/PNG/WebP, under 1 MB each)</td><td>Not supported by Bluesky</td><td>1 (MP4/MOV/WebM, 100 MB, 3 min)</td></tr>
+        <tr><td><span class="platform p-x">𝕏</span>X (API)</td><td>Up to 4 (JPG/PNG/WebP, 5 MB each)</td><td>1 (15 MB)</td><td>1 (MP4/MOV, 512 MB)</td></tr>
+      </table>
+      <p>A post can have images <em>or</em> one GIF <em>or</em> one video, not a mix. X's browser composer can't receive files, so attach media there by hand.</p>
+
+      <h3 id="import">Importing your Bluesky contacts</h3>
+      <p>Instead of adding people one at a time, bring in everyone you follow on Bluesky.</p>
+      <ol class="steps">
+        <li>On <strong>Accounts</strong>, enter your Bluesky handle. An app password is only needed to publish, not to import.</li>
+        <li>On <strong>Contacts</strong>, click <strong>Sync Bluesky follows</strong>. A running count is shown while it works.</li>
+        <li>When it finishes you'll see how many contacts were added and how many existing ones were refreshed. It's safe to run again: people are matched by their Bluesky account and never duplicated.</li>
+      </ol>
+      <p>Each imported contact gets a template key, name, avatar and Bluesky handle. Any X or LinkedIn links in their bio are picked up automatically, and you can fill in the rest later by hand or with the Copilot finder. Large follow lists can take a minute.</p>
+
+      <h3 id="contacts">Managing contacts</h3>
+      <p>Every person you pick with <kbd>@</kbd> is saved automatically. The <strong>Contacts</strong> page lets you search by name, key or handle, filter by whether they have X or LinkedIn linked, sort (A to Z, most used, recently used or added), and edit or delete anyone. In the editor you can link accounts, verify them, and run the Copilot finder.</p>
+      <figure><img src="img/contact-edit.png" alt="Editing a contact: display name, template key and accounts on each platform" loading="lazy"><figcaption>Editing a contact</figcaption></figure>
+    </section>
+
+    <section id="screenshots">
+      <h2>Screenshots</h2>
+      <div class="gallery">
+        <figure><img src="img/compose.png" alt="Compose page" loading="lazy"><figcaption>Compose</figcaption></figure>
+        <figure><img src="img/compose-dark.png" alt="Compose page in dark mode" loading="lazy"><figcaption>Dark mode (toggle in the top bar)</figcaption></figure>
+        <figure><img src="img/contacts.png" alt="Contacts page" loading="lazy"><figcaption>Contacts</figcaption></figure>
+        <figure><img src="img/history.png" alt="History page" loading="lazy"><figcaption>History</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="config">
+      <h2>Configuration</h2>
+      <p>There are no API keys to put in config files: credentials are entered on the Accounts page and stored locally. The one option is the data folder.</p>
+      <table>
+        <tr><th>Setting</th><th>Default</th></tr>
+        <tr><td><code>SocialPoster:DataDirectory</code><br>(env <code>SocialPoster__DataDirectory</code>)</td><td><code>%LOCALAPPDATA%\SocialPoster</code> on Windows<br><code>~/.local/share/SocialPoster</code> on Linux<br><code>~/Library/Application Support/SocialPoster</code> on macOS</td></tr>
+      </table>
+      <p>The folder holds <code>socialposter.db</code> (SQLite) and <code>keys/</code> (the Data Protection key ring). Keep them together: the database can't be decrypted without <code>keys/</code>.</p>
+    </section>
+
+    <section id="security">
+      <h2>Security</h2>
+      <div class="note warn">
+        <strong>Local use only</strong>
+        <p>The app has no login. Anyone who can reach it can post as you, so keep it bound to <code>localhost</code> and don't expose it to a network or the internet.</p>
+      </div>
+      <ul>
+        <li>Credentials are encrypted with ASP.NET Core Data Protection. On Windows the key ring is protected with DPAPI. On Linux and macOS there's no OS-level key protection, so the keys rely on owner-only file permissions (the app sets the data folder to <code>700</code>). Treat the folder like an SSH key.</li>
+        <li>Use a Bluesky <strong>app password</strong>, never your main password.</li>
+        <li>Forgetting a LinkedIn token only removes the local copy; it doesn't revoke it at LinkedIn.</li>
+      </ul>
+    </section>
+
+    <section id="limits">
+      <h2>Limitations</h2>
+      <ul>
+        <li>No threads or scheduling. Media is limited to what each platform accepts, and Bluesky doesn't support GIFs.</li>
+        <li>LinkedIn people can't be tagged automatically unless you know their URN. The finder gets their profile URL and you tag them by hand after posting. Organization vanity lookup needs Community Management API access.</li>
+        <li>X lookups and posts cost money depending on your plan, unless you use the free browser option, where you click Post yourself.</li>
+        <li>Posting to a LinkedIn company page isn't supported; posts go from your personal account.</li>
+      </ul>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <details>
+        <summary>LinkedIn says the token is invalid or expired</summary>
+        <p>Tokens last about 60 days. Generate a new one with the scopes <code>openid</code>, <code>profile</code> and <code>w_member_social</code> and save it again. Make sure both products (<em>Share on LinkedIn</em> and <em>Sign In with LinkedIn using OpenID Connect</em>) are approved for your app.</p>
+      </details>
+      <details>
+        <summary>LinkedIn rejects posts with a version error</summary>
+        <p>Change <em>API version</em> on the LinkedIn card to a more recent <code>YYYYMM</code> value.</p>
+      </details>
+      <details>
+        <summary>X returns "payment required" or "forbidden"</summary>
+        <p>Your API plan doesn't include posting, or the tokens were generated before you set <em>Read and write</em> permissions. Either regenerate the tokens, or switch to <em>Post via browser instead</em>.</p>
+      </details>
+      <details>
+        <summary>Bluesky rejects an image</summary>
+        <p>Bluesky images must be under 1 MB each and can't be mixed with video. GIFs aren't supported. Resize or compress the image and try again.</p>
+      </details>
+      <details>
+        <summary>The Copilot finder says it has no token</summary>
+        <p>Run <code>copilot login</code>, or set <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>, or paste a GitHub token under <em>Accounts → Copilot account finder</em>. On Linux and macOS the saved CLI login isn't read automatically.</p>
+      </details>
+      <details>
+        <summary>My credentials disappeared after moving the data folder</summary>
+        <p>The database is encrypted with the keys in <code>keys/</code>. Move or back up the whole folder together. If the keys are lost you'll need to re-enter your credentials.</p>
+      </details>
+      <details>
+        <summary>The browser blocked the new tab after publishing</summary>
+        <p>For X browser posting and LinkedIn tagging, the app opens a new tab. If your pop-up blocker stops it, use the <em>Open again</em> or <em>View post</em> link in the results instead.</p>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>SocialPoster is open source under the <a href="https://github.com/isaacrlevin/SocialPoster/blob/main/LICENSE">MIT license</a>.
+  Issues and pull requests are welcome on <a href="https://github.com/isaacrlevin/SocialPoster">GitHub</a>.</p>
+</footer>
+
+</body>
+</html>
