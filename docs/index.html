@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SocialPoster: write one post, publish to X, Bluesky and LinkedIn</title>
-  <meta name="description" content="A local Blazor app that publishes one post to X, Bluesky and LinkedIn with mentions converted correctly for each platform. Setup guide and documentation.">
+  <title>SocialPoster: write one post, publish to X, Bluesky, LinkedIn and Mastodon</title>
+  <meta name="description" content="A local Blazor app that publishes one post to X, Bluesky, LinkedIn and Mastodon with mentions converted correctly for each platform. Setup guide and documentation.">
   <meta property="og:title" content="SocialPoster">
-  <meta property="og:description" content="Write one post and publish it to X, Bluesky and LinkedIn, with mentions converted correctly for each platform.">
+  <meta property="og:description" content="Write one post and publish it to X, Bluesky, LinkedIn and Mastodon, with mentions converted correctly for each platform.">
   <meta property="og:image" content="img/compose.png">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b5bf0'/%3E%3Cpath d='M8 16l16-7-5 14-3-6z' fill='white'/%3E%3C/svg%3E">
@@ -16,7 +16,7 @@
 <header class="hero">
   <div class="logo" aria-hidden="true">➤</div>
   <h1>SocialPoster</h1>
-  <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong> and <strong>LinkedIn</strong>, with @-mentions converted correctly for each platform.</p>
+  <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong> and <strong>Mastodon</strong>, with @-mentions converted correctly for each platform.</p>
   <div class="btns">
     <a class="btn primary" href="#quick-start">Get started</a>
     <a class="btn" href="https://github.com/isaacrlevin/SocialPoster">View on GitHub</a>
@@ -36,6 +36,7 @@
     <a class="sub" href="#copilot">Copilot finder</a>
     <a href="#using">Using the app</a>
     <a class="sub" href="#mentions">Mentions</a>
+    <a class="sub" href="#scheduling">Optional scheduling</a>
     <a class="sub" href="#media">Images, GIFs &amp; video</a>
     <a class="sub" href="#import">Import Bluesky contacts</a>
     <a class="sub" href="#contacts">Managing contacts</a>
@@ -85,6 +86,16 @@ dotnet run --launch-profile http</code></pre>
       <h2>Connect your accounts</h2>
       <p>Open <strong>Accounts</strong> in the sidebar. You only need to connect the platforms you want to publish to; the rest stay "copy only".</p>
       <figure><img src="img/accounts.png" alt="The Accounts page with cards for Bluesky, X, LinkedIn and the Copilot finder" loading="lazy"><figcaption>The Accounts page</figcaption></figure>
+
+      <h3 id="mastodon">Ⓜ Mastodon</h3>
+      <ol class="steps">
+        <li>Enable Mastodon under <strong>Accounts</strong>. On your home instance, open <strong>Preferences → Development</strong>, create an application and copy its access token with <code>read:accounts</code>, <code>read:search</code>, <code>write:statuses</code> and <code>write:media</code> permissions.</li>
+        <li>Enter the HTTPS instance origin (for example <code>https://mastodon.social</code>, not a profile URL) and token. <strong>Save and verify</strong> checks the account before protecting and saving both values. Changing instance requires a new token; leaving it blank keeps the token only on the same instance.</li>
+        <li><strong>Test saved token</strong> checks persisted credentials. <strong>Forget token</strong> removes it locally; revoke it on your instance if needed. Disabling Mastodon keeps saved credentials and contacts.</li>
+      </ol>
+      <p>Use the normal platform selection, preview, override, copy, publish and history workflows. Posts are <strong>public</strong>. Mastodon counts graphemes, URLs as 23 characters and remote mentions as their local <code>@username</code>. Detection covers HTTP(S) and common bare-domain links, excluding emails and mention domains; unusual URL syntax may differ from the server parser. The app uses conservative defaults, not dynamic instance discovery: 500 characters; four 8 MB JPG/PNG/WebP images, one 8 MB GIF, or one 40 MB MP4/WebM video, without mixing kinds. Alt text becomes the media description (up to 1000 characters). Upload processing finishes before posting; upload, processing, validation, rate-limit and reconnect errors are shown. Failed attempts can leave uploaded media on the server.</p>
+      <p>Connected-instance search works in the composer. Contacts supports fully qualified <code>user@server</code>, local-handle lookup/verification, profile links, filtering and badges. <strong>Sync Mastodon follows</strong> imports paginated follows with progress and conflict safeguards. Stable identity uses the canonical ActivityPub actor URI, not server-local numeric IDs. Explicit qualified accts and Mastodon-shaped profile links in bios can link accounts; ambiguous/conflicting evidence requires review. Merge and purge include Mastodon while retaining other identities. Existing databases upgrade automatically.</p>
+      <p>Mastodon <strong>4.2 or newer</strong> is required for canonical actor URIs. Local accts use the canonical actor domain, including when the instance uses a different web domain. Unknown remote accounts fall back from exact lookup to resolving search; unrelated results are rejected. Empty HTTP 206 media responses are treated as still processing. HTTPS origins are required. Server limits and discovery availability may vary. Copilot discovery remains X/LinkedIn only; OAuth authorization/token generation or refresh, visibility selection and account-migration inference are not included.</p>
 
       <h3 id="bluesky"><span class="platform p-bsky">🦋</span>Bluesky</h3>
       <ol class="steps">
@@ -156,6 +167,9 @@ dotnet run --launch-profile http</code></pre>
         <li><strong>LinkedIn people</strong> can't be tagged by apps without partner access. After publishing, a <em>Tag by hand</em> checklist lists each person with a copy button and their profile link. Company pages with a numeric ID are tagged automatically.</li>
       </ul>
 
+      <h3 id="scheduling">Optional scheduling</h3>
+      <p>Scheduling is optional. Use <strong>Publish to ...</strong> in the composer to publish now, or choose a local date and time and click <strong>Schedule selected platforms</strong> to publish later. Scheduled posts use the selected platforms, text overrides and media. Timed delivery requires the app's scheduling worker to be running around the due time, and its data directory must remain available. X's browser-intent mode can't be scheduled because it requires you to finish publishing yourself.</p>
+
       <h3 id="media">Images, GIFs and video</h3>
       <p>Drop files onto the <strong>Media</strong> area under the post box, or click to browse. Each platform's limits are checked live in its preview card, and you can switch a platform off to skip it. Add alt text to images for screen readers.</p>
       <table>
@@ -170,10 +184,11 @@ dotnet run --launch-profile http</code></pre>
       <p>Instead of adding people one at a time, bring in everyone you follow on Bluesky.</p>
       <ol class="steps">
         <li>On <strong>Accounts</strong>, enter your Bluesky handle. An app password is only needed to publish, not to import.</li>
-        <li>On <strong>Contacts</strong>, click <strong>Sync Bluesky follows</strong>. A running count is shown while it works.</li>
+        <li>On <strong>Contacts</strong>, click <strong>Sync Bluesky follows</strong>. The <strong>Handle Duplicates</strong> prompt offers <strong>Yes, review</strong>, <strong>Sync without handling</strong>, or <strong>Cancel</strong>. A running count is shown while it works.</li>
         <li>When it finishes you'll see how many contacts were added and how many existing ones were refreshed. It's safe to run again: people are matched by their Bluesky account and never duplicated.</li>
       </ol>
-      <p>Each imported contact gets a template key, name, avatar and Bluesky handle. Any X or LinkedIn links in their bio are picked up automatically, and you can fill in the rest later by hand or with the Copilot finder. Large follow lists can take a minute.</p>
+      <p>Each imported contact gets a template key, name, avatar and Bluesky handle. Any unambiguous X or LinkedIn links in their bio can be picked up, and you can fill in the rest later by hand or with the Copilot finder. Large follow lists can take a minute.</p>
+      <p>The same <strong>Handle Duplicates</strong> experience applies to Bluesky, X and Mastodon follow syncs. Opting in pauses an incoming account before saving when identities or profile links conflict, or normalized names suggest a possible duplicate. Names are suggestions, never proof. Choose a saved contact, resolve every whole-platform identity collision in the manual merge review, and confirm; its keys, aliases, edited metadata, usage and history are preserved and discovery caches invalidated. Or keep the account separate, skip it, or cancel the remaining sync. Identity ownership and reviewed snapshots are rechecked before saving: an identity cannot be taken from a third contact, and concurrent contact changes require a fresh preview. No incoming contact is saved while awaiting review. Cancelling or leaving the page preserves completed imports but stops remaining work. Sync without handling retains the existing safe behavior; success appears only after all reviews finish. Close an open contact editor before syncing.</p>
 
       <h3 id="contacts">Managing contacts</h3>
       <p>Every person you pick with <kbd>@</kbd> is saved automatically. The <strong>Contacts</strong> page lets you search by name, key or handle, filter by whether they have X or LinkedIn linked, sort (A to Z, most used, recently used or added), and edit or delete anyone. In the editor you can link accounts, verify them, and run the Copilot finder.</p>
@@ -192,12 +207,15 @@ dotnet run --launch-profile http</code></pre>
 
     <section id="config">
       <h2>Configuration</h2>
-      <p>There are no API keys to put in config files: credentials are entered on the Accounts page and stored locally. The one option is the data folder.</p>
+      <p>There are no API keys to put in config files: credentials are entered on the Accounts page and stored locally. The sample host binds the <code>SocialPoster</code> configuration section.</p>
       <table>
         <tr><th>Setting</th><th>Default</th></tr>
         <tr><td><code>SocialPoster:DataDirectory</code><br>(env <code>SocialPoster__DataDirectory</code>)</td><td><code>%LOCALAPPDATA%\SocialPoster</code> on Windows<br><code>~/.local/share/SocialPoster</code> on Linux<br><code>~/Library/Application Support/SocialPoster</code> on macOS</td></tr>
+        <tr><td><code>SocialPoster:DatabaseFileName</code></td><td><code>socialposter.db</code> (file name within the data folder)</td></tr>
+        <tr><td><code>SocialPoster:PostingTimeout</code></td><td><code>00:30:00</code> (allows large media uploads)</td></tr>
       </table>
       <p>The folder holds <code>socialposter.db</code> (SQLite) and <code>keys/</code> (the Data Protection key ring). Keep them together: the database can't be decrypted without <code>keys/</code>.</p>
+      <p>Embedding in another project? The implementation is packaged as <strong>SocialPoster.Core</strong> (services, data and models) and <strong>SocialPoster.Components</strong> (Blazor UI and assets). See the <a href="https://github.com/isaacrlevin/SocialPoster#embed-socialposter-in-your-own-project">README's package consumer guide</a> for registration, database initialization, routing, interactive server hosting and security responsibilities. The libraries retain the local single-user storage model; they do not add authentication or change the host's Data Protection identity.</p>
     </section>
 
     <section id="security">
@@ -216,7 +234,7 @@ dotnet run --launch-profile http</code></pre>
     <section id="limits">
       <h2>Limitations</h2>
       <ul>
-        <li>No threads or scheduling. Media is limited to what each platform accepts, and Bluesky doesn't support GIFs.</li>
+        <li>No threads. Media is limited to what each platform accepts, and Bluesky doesn't support GIFs.</li>
         <li>LinkedIn people can't be tagged automatically unless you know their URN. The finder gets their profile URL and you tag them by hand after posting. Organization vanity lookup needs Community Management API access.</li>
         <li>X lookups and posts cost money depending on your plan, unless you use the free browser option, where you click Post yourself.</li>
         <li>Posting to a LinkedIn company page isn't supported; posts go from your personal account.</li>

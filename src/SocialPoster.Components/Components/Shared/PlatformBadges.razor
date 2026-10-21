@@ -1,0 +1,29 @@
+﻿@inherits PlatformComponent
+
+<span class="platform-badges">
+    @if (EnabledPlatforms.Contains(Platform.Mastodon))
+    {
+        <span class="pbadge @(Contact.HasIdentity(Platform.Mastodon) ? "on" : "off")" title="@(Contact.MastodonAcct is null ? "No Mastodon account" : "@" + Contact.MastodonAcct)">Ⓜ</span>
+    }
+    @if (EnabledPlatforms.Contains(Platform.X))
+    {
+    <span class="pbadge @(Contact.HasIdentity(Platform.X) ? "on" : "off")" title="@(Contact.XUsername is null ? "No X account" : "@" + Contact.XUsername)">𝕏</span>
+    }
+    @if (EnabledPlatforms.Contains(Platform.Bluesky))
+    {
+    <span class="pbadge @(Contact.HasIdentity(Platform.Bluesky) ? "on" : "off")" title="@(Contact.BlueskyHandle is null ? "No Bluesky account" : "@" + Contact.BlueskyHandle)">🦋</span>
+    }
+    @if (EnabledPlatforms.Contains(Platform.LinkedIn))
+    {
+    <span class="pbadge @(Contact.HasIdentity(Platform.LinkedIn) ? "on" : Contact.NeedsManualLinkedInTag ? "partial" : "off")"
+          title="@(Contact.LinkedInUrn ?? (Contact.NeedsManualLinkedInTag ? "LinkedIn profile known; tag by hand after posting" : "No LinkedIn account"))">in</span>
+    }
+    @if (EnabledPlatforms.Contains(Platform.Threads))
+    {
+    <span class="pbadge @(Contact.HasIdentity(Platform.Threads) ? "on" : "off")" title="@(Contact.ThreadsUsername is null ? "No Threads account" : "@" + Contact.ThreadsUsername)">@@</span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+}

@@ -1,0 +1,522 @@
+@inject IServiceProvider Services
+@inject IJSRuntime JS
+@using System.Globalization
+
+@if (scheduling is not null)
+{
+    <MudPaper Class="sp-card scheduling-panel" Elevation="0">
+        <div class="sp-card-header">
+            <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Schedule a post</MudText>
+            <MudButton Class="ms-auto" Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+                       Disabled="@working" OnClick="RefreshAsync">Refresh</MudButton>
+        </div>
+        <div class="sp-card-body">
+            @if (store is null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+                    Scheduling is registered without a scheduled-post store, so scheduled posts cannot be loaded or managed.
+                </MudAlert>
+            }
+
+            @if (error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3">@error</MudAlert>
+            }
+            @if (notice is not null)
+            {
+                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-3">@notice</MudAlert>
+            }
+
+            @if (HasXIntentSelected)
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+                    X is selected in browser-intent mode and cannot be scheduled because it requires a person to finish publishing.
+                    Deselect X in the composer to schedule the other selected platforms; it has not been removed automatically.
+                </MudAlert>
+            }
+            @if (browserTimeZoneId is not null && timeZoneId is not null &&
+                 !string.Equals(browserTimeZoneId, timeZoneId, StringComparison.OrdinalIgnoreCase))
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                    This schedule uses @timeZoneId. Your browser is currently in @browserTimeZoneId; the original schedule time zone is kept unless you change it.
+                </MudAlert>
+            }
+
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Scheduling is optional. To publish now, use the Publish button in the composer; choose a time below only if you want SocialPoster to publish later. Scheduled posts use the selected platforms, text overrides, and media.
+            </MudText>
+            @if (editingPost is not null)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                    Editing @editingPost.Id. Its text is loaded into the composer; changes are frozen only when you save this schedule.
+                    Existing attachments stay in place unless you upload new media while editing, which replaces them.
+                </MudAlert>
+            }
+            @if (reschedulingPost is not null)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                    Changing the delivery time for @reschedulingPost.Id preserves its frozen platform identities and content.
+                </MudAlert>
+            }
+
+            <div class="scheduling-fields">
+                <label class="scheduling-field">
+                    <span>Local date and time</span>
+                    <input type="datetime-local" class="scheduling-input" value="@localTimeInput"
+                           @oninput="OnLocalTimeChanged" aria-describedby="schedule-time-help" />
+                </label>
+                <label class="scheduling-field">
+                    <span>Time zone</span>
+                    <input type="text" class="scheduling-input" @bind="timeZoneId" @bind:event="oninput"
+                           @bind:after="ValidateLocalTime" placeholder="Detecting browser time zone…" />
+                </label>
+                @if (ambiguousOffsets.Count > 0)
+                {
+                    <label class="scheduling-field">
+                        <span>This local time occurs twice; choose its UTC offset</span>
+                        <select class="scheduling-input" value="@ambiguousOffsetText" @onchange="OnAmbiguousOffsetChanged"
+                                aria-label="Choose which occurrence of this local time to use">
+                            <option value="">Choose an offset</option>
+                            @foreach (var offset in ambiguousOffsets)
+                            {
+                                <option value="@offset.ToString("c", CultureInfo.InvariantCulture)">
+                                    @FormatUtcOffset(offset)
+                                </option>
+                            }
+                        </select>
+                    </label>
+                }
+            </div>
+            <MudText id="schedule-time-help" Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                Browser time zone: @(browserTimeZoneId ?? "detecting…"). Enter a time as shown on your local clock.
+            </MudText>
+            @if (timeValidationMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Text" Dense="true" Class="mt-2">@timeValidationMessage</MudAlert>
+            }
+
+            <div class="d-flex align-center gap-2 flex-wrap mt-3">
+                @if (reschedulingPost is not null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSubmitTime || working)"
+                               OnClick="SaveRescheduleAsync">
+                        @if (working) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
+                        Save new time
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@working" OnClick="StopRescheduling">Keep current time</MudButton>
+                }
+                else if (editingPost is not null)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSubmitRequest || working)"
+                               OnClick="SaveContentChangesAsync">
+                        @if (working) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
+                        Save schedule changes
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@working" OnClick="StopEditing">Stop editing</MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanSubmitRequest || working)"
+                               OnClick="CreateScheduleAsync" StartIcon="@Icons.Material.Filled.Schedule">
+                        @if (working) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
+                        Schedule selected platforms
+                    </MudButton>
+                }
+            </div>
+
+            @if (store is not null)
+            {
+                <div class="mt-4">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.History"
+                               OnClick="() => historyOpen = true">Scheduled posts (@posts.Count)</MudButton>
+                </div>
+                <MudDialog Visible="@historyOpen" VisibleChanged="OnHistoryVisibleChanged" Options="@historyOptions">
+                <TitleContent>
+                    <MudText Typo="Typo.h6">Scheduled posts</MudText>
+                </TitleContent>
+                <DialogContent>
+                @if (posts.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">No scheduled posts yet.</MudText>
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var post in posts.OrderBy(p => p.DueAtUtc))
+                        {
+                            <MudPaper @key="post.Id" Outlined="true" Elevation="0" Class="scheduled-post pa-3">
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <MudText Typo="Typo.subtitle1" Class="fw-semibold">@post.LocalDateTime.ToString("g", CultureInfo.CurrentCulture)</MudText>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@post.State</MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@post.TimeZoneId</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ms-auto">Revision @post.Revision</MudText>
+                                </div>
+                                <div class="scheduled-platforms mt-2">
+                                    @foreach (var platform in post.Platforms)
+                                    {
+                                        var outcome = post.Outcomes.FirstOrDefault(item => item.Platform == platform.Platform);
+                                        <div class="scheduled-platform">
+                                            <strong>@PlatformInfo.Label(platform.Platform)</strong>
+                                            <span class="text-break">@platform.Post.DisplayText</span>
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(outcome?.State.ToString() ?? "Pending")</MudChip>
+                                            @if (outcome?.Attempts > 0)
+                                            {
+                                                <span class="mud-secondary-text">Attempts: @outcome.Attempts</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(outcome?.Url))
+                                            {
+                                                <MudLink Href="@outcome.Url" Target="_blank">View post</MudLink>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(outcome?.Detail))
+                                            {
+                                                <span class="text-break">@outcome.Detail</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                @if (post.Media.Count > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+                                        Media: @string.Join(", ", post.Media.Select(item => item.FileName))
+                                    </MudText>
+                                }
+                                <MudText Typo="Typo.body2" Class="scheduled-content mt-2">@post.BaseTemplate</MudText>
+                                <div class="d-flex gap-2 flex-wrap mt-2">
+                                    @if (CanEditOrReschedule(post))
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Edit"
+                                                   Disabled="@working" OnClick="() => BeginEditingAsync(post)">Edit content</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Schedule"
+                                                   Disabled="@working" OnClick="() => BeginRescheduling(post)">Reschedule</MudButton>
+                                    }
+                                    @if (post.State == ScheduleState.Queued)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Cancel"
+                                                   Disabled="@working" OnClick="() => CancelScheduleAsync(post)">Cancel schedule</MudButton>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+                </DialogContent>
+                <DialogActions>
+                    <MudButton StartIcon="@Icons.Material.Filled.Refresh" Disabled="@working" OnClick="RefreshAsync">Refresh</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => historyOpen = false">Close</MudButton>
+                </DialogActions>
+                </MudDialog>
+            }
+        </div>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public string BaseTemplate { get; set; } = "";
+    [Parameter] public IReadOnlyDictionary<Platform, string> Templates { get; set; } = new Dictionary<Platform, string>();
+    [Parameter] public IReadOnlyList<MediaAttachment> Media { get; set; } = [];
+    [Parameter] public IReadOnlyList<Platform> SelectedPlatforms { get; set; } = [];
+    [Parameter] public bool XIntent { get; set; }
+    [Parameter] public Func<Task<ComposerSubmission>>? PrepareSubmission { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<ScheduledPost> OnLoadForEdit { get; set; }
+
+    private SchedulingService? scheduling;
+    private IScheduledPostStore? store;
+    private IReadOnlyList<ScheduledPost> posts = [];
+    private ScheduledPost? editingPost;
+    private ScheduledPost? reschedulingPost;
+    private HashSet<string> mediaAtEditStart = new(StringComparer.Ordinal);
+    private readonly List<TimeSpan> ambiguousOffsets = [];
+    private string localTimeInput = "";
+    private string timeZoneId = "";
+    private string? browserTimeZoneId;
+    private string? ambiguousOffsetText;
+    private string? timeValidationMessage;
+    private string? error;
+    private string? notice;
+    private bool browserTimeZoneLoaded;
+    private bool working;
+    private bool historyOpen;
+    private readonly DialogOptions historyOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+
+    private void OnHistoryVisibleChanged(bool visible) => historyOpen = visible;
+
+    private void OnLocalTimeChanged(ChangeEventArgs args)
+    {
+        localTimeInput = args.Value?.ToString() ?? "";
+        ValidateLocalTime();
+    }
+
+    private bool HasXIntentSelected => XIntent && SelectedPlatforms.Contains(Platform.X);
+    private bool CanSubmitTime => !Busy && timeValidationMessage is null && !string.IsNullOrWhiteSpace(timeZoneId)
+        && TryParseLocalTime(out _) && (ambiguousOffsets.Count == 0 || ParseAmbiguousOffset() is not null);
+    private bool CanSubmitRequest => CanSubmitTime && SelectedPlatforms.Count > 0 && !HasXIntentSelected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        scheduling = Services.GetService(typeof(SchedulingService)) as SchedulingService;
+        if (scheduling is null) return;
+        store = Services.GetService(typeof(IScheduledPostStore)) as IScheduledPostStore;
+        if (store is not null) await RefreshAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (browserTimeZoneLoaded || scheduling is null) return;
+        browserTimeZoneLoaded = true;
+        browserTimeZoneId = await JS.InvokeAsync<string?>("socialPoster.getTimeZone");
+        if (string.IsNullOrWhiteSpace(timeZoneId) && !string.IsNullOrWhiteSpace(browserTimeZoneId))
+            timeZoneId = browserTimeZoneId;
+        ValidateLocalTime();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (store is null) return;
+        error = null;
+        try
+        {
+            posts = await store.ListAsync();
+        }
+        catch (Exception ex) when (IsExpectedFailure(ex))
+        {
+            error = ex.Message;
+        }
+    }
+
+    private async Task CreateScheduleAsync()
+    {
+        if (working || scheduling is null || !CanSubmitRequest || !TryGetRequestTime(out var local, out var offset)) return;
+        working = true;
+        error = null;
+        notice = null;
+        try
+        {
+            var submission = PrepareSubmission is null ? null : await PrepareSubmission();
+            var request = new ScheduleRequest(submission?.BaseTemplate ?? BaseTemplate,
+                submission?.Templates ?? Templates, submission?.Media ?? Media.ToArray(), local, timeZoneId, offset);
+            await scheduling.CreateAsync(request);
+            notice = "The post was scheduled. Uploaded media is now managed by durable schedule storage.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (IsExpectedFailure(ex))
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private async Task BeginEditingAsync(ScheduledPost post)
+    {
+        if (!CanEditOrReschedule(post)) return;
+        historyOpen = false;
+        await OnLoadForEdit.InvokeAsync(post);
+        editingPost = post;
+        reschedulingPost = null;
+        mediaAtEditStart = Media.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+        SetTime(post.LocalDateTime, post.TimeZoneId, post.AmbiguousOffset);
+        error = null;
+        notice = null;
+    }
+
+    private async Task SaveContentChangesAsync()
+    {
+        if (scheduling is null || editingPost is null || !CanSubmitTime || !TryGetRequestTime(out var local, out var offset)) return;
+        working = true;
+        error = null;
+        notice = null;
+        try
+        {
+            var submission = PrepareSubmission is null ? null : await PrepareSubmission();
+            var newlyUploadedMedia = Media.Where(item => !mediaAtEditStart.Contains(item.Id)).ToArray();
+            var request = new ScheduleRequest(submission?.BaseTemplate ?? BaseTemplate, submission?.Templates ?? Templates, newlyUploadedMedia, local, timeZoneId, offset);
+            await scheduling.UpdateAsync(editingPost.Id, editingPost.Revision, request);
+            notice = "The schedule was updated and its content was frozen again.";
+            editingPost = null;
+            mediaAtEditStart.Clear();
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (IsExpectedFailure(ex))
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private void StopEditing()
+    {
+        editingPost = null;
+        mediaAtEditStart.Clear();
+        error = null;
+    }
+
+    private void BeginRescheduling(ScheduledPost post)
+    {
+        if (!CanEditOrReschedule(post)) return;
+        historyOpen = false;
+        editingPost = null;
+        reschedulingPost = post;
+        SetTime(post.LocalDateTime, post.TimeZoneId, post.AmbiguousOffset);
+        error = null;
+        notice = null;
+    }
+
+    private async Task SaveRescheduleAsync()
+    {
+        if (scheduling is null || reschedulingPost is null || !CanSubmitTime || !TryGetRequestTime(out var local, out var offset)) return;
+        working = true;
+        error = null;
+        notice = null;
+        try
+        {
+            await scheduling.RescheduleAsync(reschedulingPost.Id, reschedulingPost.Revision, local, timeZoneId, offset);
+            notice = "The delivery time was updated; frozen platform identities and content were preserved.";
+            reschedulingPost = null;
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (IsExpectedFailure(ex))
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private void StopRescheduling()
+    {
+        reschedulingPost = null;
+        error = null;
+    }
+
+    private async Task CancelScheduleAsync(ScheduledPost post)
+    {
+        if (scheduling is null || post.State != ScheduleState.Queued) return;
+        if (!await JS.InvokeAsync<bool>("confirm", $"Cancel the scheduled post due {post.LocalDateTime:g} ({post.TimeZoneId})?"))
+            return;
+        working = true;
+        error = null;
+        notice = null;
+        try
+        {
+            await scheduling.CancelAsync(post.Id, post.Revision);
+            if (editingPost?.Id == post.Id) StopEditing();
+            if (reschedulingPost?.Id == post.Id) StopRescheduling();
+            notice = "The scheduled post was cancelled.";
+            await RefreshAsync();
+        }
+        catch (Exception ex) when (IsExpectedFailure(ex))
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private static bool CanEditOrReschedule(ScheduledPost post) =>
+        post.State == ScheduleState.Queued &&
+        post.Outcomes.All(outcome => outcome.Attempts == 0 && outcome.State == DeliveryState.Pending);
+
+    private void SetTime(DateTime local, string zoneId, TimeSpan? offset)
+    {
+        localTimeInput = DateTime.SpecifyKind(local, DateTimeKind.Unspecified)
+            .ToString("yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture);
+        timeZoneId = zoneId;
+        ambiguousOffsetText = offset?.ToString("c", CultureInfo.InvariantCulture);
+        ValidateLocalTime();
+    }
+
+    private void OnAmbiguousOffsetChanged(ChangeEventArgs args)
+    {
+        ambiguousOffsetText = args.Value?.ToString();
+        ValidateLocalTime();
+    }
+
+    private void ValidateLocalTime()
+    {
+        ambiguousOffsets.Clear();
+        timeValidationMessage = null;
+        if (!TryParseLocalTime(out var local))
+        {
+            timeValidationMessage = "Enter a valid local date and time.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(timeZoneId))
+        {
+            timeValidationMessage = "A time zone is required. Choose the detected browser time zone or enter a valid time zone ID.";
+            return;
+        }
+
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            if (zone.IsInvalidTime(local))
+            {
+                timeValidationMessage = "This local time does not exist because clocks move forward. Choose another time.";
+                return;
+            }
+            if (zone.IsAmbiguousTime(local))
+            {
+                ambiguousOffsets.AddRange(zone.GetAmbiguousTimeOffsets(local));
+                if (ParseAmbiguousOffset() is not { } selected || !ambiguousOffsets.Contains(selected))
+                    timeValidationMessage = "This local time occurs twice. Choose which UTC offset to use.";
+                if (timeValidationMessage is null)
+                    ScheduleTime.Resolve(local, timeZoneId, ParseAmbiguousOffset(), DateTimeOffset.UtcNow);
+                return;
+            }
+
+            ambiguousOffsetText = null;
+            ScheduleTime.Resolve(local, timeZoneId, null, DateTimeOffset.UtcNow);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            timeValidationMessage = $"The time zone ID '{timeZoneId}' is not available on this server.";
+        }
+        catch (InvalidTimeZoneException)
+        {
+            timeValidationMessage = $"The time zone '{timeZoneId}' is invalid on this server.";
+        }
+        catch (ArgumentException ex)
+        {
+            timeValidationMessage = ex.Message;
+        }
+    }
+
+    private bool TryGetRequestTime(out DateTime local, out TimeSpan? offset)
+    {
+        local = default;
+        offset = null;
+        if (!CanSubmitTime || !TryParseLocalTime(out local)) return false;
+        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        offset = ParseAmbiguousOffset();
+        return true;
+    }
+
+    private bool TryParseLocalTime(out DateTime local) =>
+        DateTime.TryParseExact(localTimeInput,
+            ["yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out local);
+
+    private TimeSpan? ParseAmbiguousOffset() =>
+        TimeSpan.TryParseExact(ambiguousOffsetText, "c", CultureInfo.InvariantCulture, out var offset)
+            ? offset
+            : null;
+
+    private static string FormatUtcOffset(TimeSpan offset) =>
+        $"UTC{(offset < TimeSpan.Zero ? "-" : "+")}{offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture)}";
+
+    private static bool IsExpectedFailure(Exception exception) =>
+        exception is ArgumentException or InvalidOperationException or TimeZoneNotFoundException
+            or InvalidTimeZoneException or IOException or HttpRequestException or OperationCanceledException;
+}

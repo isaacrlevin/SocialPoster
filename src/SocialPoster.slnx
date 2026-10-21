@@ -1,5 +1,7 @@
 <Solution>
+    <Project Path="SocialPoster.Posting/SocialPoster.Posting.csproj" />
     <Project Path="SocialPoster.Core/SocialPoster.Core.csproj" />
+    <Project Path="SocialPoster.Components/SocialPoster.Components.csproj" />
     <Project Path="SocialPoster.Web/SocialPoster.Web.csproj" />
     <Project Path="SocialPoster.Tests/SocialPoster.Tests.csproj" />
 </Solution>

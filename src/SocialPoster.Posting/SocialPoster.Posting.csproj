@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>SocialPoster.Posting</RootNamespace>
+        <IsPackable>true</IsPackable>
+        <PackageId>SocialPoster.Posting</PackageId>
+        <Version>0.5.0</Version>
+        <Authors>Isaac Levin</Authors>
+        <Description>Post text and media to X, Bluesky, LinkedIn, Mastodon and Threads from any .NET app. No database, UI or ASP.NET required.</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/isaacrlevin/SocialPoster</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/isaacrlevin/SocialPoster</PackageProjectUrl>
+        <PackageTags>social;posting;bluesky;mastodon;threads;linkedin;x;twitter</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.13" />
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SocialPoster.Core"/>
+        <InternalsVisibleTo Include="SocialPoster.Tests"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>true</IsPackable>
+        <PackageId>SocialPoster.Components</PackageId>
+        <Version>0.5.0</Version>
+        <Authors>Isaac Levin</Authors>
+        <Description>Embeddable SocialPoster Blazor components and routed UI for interactive server hosts.</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/isaacrlevin/SocialPoster</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/isaacrlevin/SocialPoster</PackageProjectUrl>
+        <PackageTags>social;blazor;components;socialposter</PackageTags>
+    </PropertyGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+        <!-- Preserve Core's transitive Copilot SDK build assets for package consumers. -->
+        <ProjectReference Include="..\SocialPoster.Core\SocialPoster.Core.csproj" PrivateAssets="none"/>
+        <PackageReference Include="MudBlazor" Version="9.11.0"/>
+        <Using Include="SocialPoster.Posting"/>
+        <Using Include="SocialPoster.Posting.Services"/>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+</Project>

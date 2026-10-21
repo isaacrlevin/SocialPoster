@@ -1,13 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\SocialPoster.Core\SocialPoster.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.14" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
-    <PackageReference Include="MudBlazor" Version="9.11.0" />
+    <ProjectReference Include="..\SocialPoster.Components\SocialPoster.Components.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -15,6 +9,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
 </Project>

@@ -1,0 +1,403 @@
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@inject SecretStore Secrets
+@inject AccountFinder Finder
+@inject AgentSettingsStore AgentStore
+
+<MudPaper Class="sp-card" Elevation="0">
+    <div class="sp-card-header">
+        <span class="platform-icon" style="background:linear-gradient(135deg,var(--mud-palette-primary),var(--mud-palette-tertiary))"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /></span>
+        <MudText Typo="Typo.h6">Account finder agent</MudText>
+        <StatusBadge Ok="@IsReady" />
+    </div>
+    <div class="sp-card-body">
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            An AI agent searches the web for people's @PlatformNames accounts so you can pick the right one, and can verify accounts and draft posts from a link.
+            Use your GitHub Copilot subscription, or add any OpenAI-compatible provider: OpenAI, Azure OpenAI, OpenRouter, Groq, or a local model through Ollama or LM Studio.
+        </MudText>
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="3">
+                <MudSwitch T="bool" @bind-Value="enabled" Color="Color.Primary" Label="Enabled" />
+                <MudTooltip Text="@($"When you mention someone who's missing an account on {PlatformNames}, search for them in the background (once per contact).")">
+                    <MudSwitch T="bool" @bind-Value="auto" Color="Color.Primary" Disabled="@(!enabled)" Label="Search automatically" />
+                </MudTooltip>
+            </MudItem>
+            <MudItem xs="12" md="9">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Agent</MudText>
+                <div class="d-flex flex-wrap gap-2 align-center">
+                    <MudChip T="string" Size="Size.Medium" Variant="@(activeId == AgentSettingsStore.CopilotId ? Variant.Filled : Variant.Outlined)"
+                             Color="@(activeId == AgentSettingsStore.CopilotId ? Color.Primary : Color.Default)"
+                             OnClick="() => SelectAsync(AgentSettingsStore.CopilotId)">GitHub Copilot</MudChip>
+                    @foreach (var p in providers)
+                    {
+                        var id = p.Id;
+                        <MudChip T="string" Size="Size.Medium" Variant="@(activeId == id ? Variant.Filled : Variant.Outlined)"
+                                 Color="@(activeId == id ? Color.Primary : Color.Default)"
+                                 OnClick="() => SelectAsync(id)">@p.Name</MudChip>
+                    }
+                    <MudChip T="string" Size="Size.Medium" Variant="Variant.Text" Color="Color.Primary" Icon="@Icons.Material.Filled.Add"
+                             OnClick="StartAdd">Add provider</MudChip>
+                </div>
+                @if (activeProvider is null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uses your GitHub Copilot subscription through the Copilot SDK. Each search uses Copilot premium requests at the chosen model's rate.</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uses @activeProvider.Name with model <code>@activeProvider.Model</code>. Requests go to <code>@HostOf(activeProvider.BaseUrl)</code> and use your own quota there.</MudText>
+                }
+            </MudItem>
+        </MudGrid>
+
+        @if (activeProvider is null)
+        {
+            <MudGrid Spacing="3" Class="mt-1">
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" Immediate="true" @bind-Value="cpModel" Label="Copilot model" Placeholder="@AccountFinder.DefaultModel" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  HelperText="@($"Small, fast models work well. {AccountFinder.DefaultModel} takes about 30 seconds per search.")" />
+                    @if (cpModels.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            @foreach (var m in cpModels)
+                            {
+                                var model = m;
+                                <MudChip T="string" Size="Size.Small" Variant="@(cpModel == model ? Variant.Filled : Variant.Outlined)" Color="@(cpModel == model ? Color.Primary : Color.Default)" OnClick="() => cpModel = model">@model</MudChip>
+                            }
+                        </div>
+                    }
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" Immediate="true" @bind-Value="cpToken" Label="GitHub token (optional)" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Placeholder="@(cpHasToken ? "•••• saved (leave blank to keep)" : "Only if you're not signed in to Copilot on this PC")" />
+                    @if (cpHasToken)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ClearCopilotTokenAsync">Remove token</MudButton>
+                    }
+                </MudItem>
+            </MudGrid>
+        }
+        else if (editing is null)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => StartEdit(activeProvider)" Disabled="@busy">Edit provider</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="() => RemoveAsync(activeProvider)" Disabled="@busy">
+                    @(confirmRemoveId == activeProvider.Id ? "Click again to remove" : "Remove provider")
+                </MudButton>
+            </div>
+        }
+
+        @if (editing is not null)
+        {
+            <MudPaper Class="pa-3 mt-3" Outlined="true" Elevation="0">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">@(editing.Id.Length == 0 ? "Add provider" : $"Edit {editing.Name}")</MudText>
+                @if (editing.Id.Length == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Start from a preset, then adjust anything you like.</MudText>
+                    <div class="d-flex flex-wrap gap-1 mb-2 mt-1">
+                        @foreach (var preset in AgentProviderPresets.All)
+                        {
+                            var chosen = preset;
+                            <MudChip T="string" Size="Size.Small" Variant="@(presetName == chosen.Name ? Variant.Filled : Variant.Outlined)"
+                                     Color="@(presetName == chosen.Name ? Color.Primary : Color.Default)"
+                                     OnClick="() => ApplyPreset(chosen)">@chosen.Name</MudChip>
+                        }
+                    </div>
+                    @if (AgentProviderPresets.All.FirstOrDefault(p => p.Name == presetName) is { } current)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">@current.Hint</MudText>
+                    }
+                }
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Immediate="true" @bind-Value="editName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" Immediate="true" @bind-Value="editModel" Label="Model or deployment name" Placeholder="@ModelPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudTextField T="string" Immediate="true" @bind-Value="editUrl" Label="Base URL" Placeholder="https://api.openai.com/v1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      HelperText="The API root that serves /chat/completions. Plain http is only allowed for this computer or your local network." />
+                    </MudItem>
+                    <MudItem xs="12" md="5">
+                        <MudTextField T="string" Immediate="true" @bind-Value="editKey" Label="API key" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Placeholder="@(editHasKey ? "•••• saved (leave blank to keep)" : "Leave blank for local servers")"
+                                      HelperText="Stored encrypted on this computer and only sent to the Base URL." />
+                    </MudItem>
+                </MudGrid>
+                <Feedback Text="@providerMsg" IsError="@providerErr" />
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveProviderAsync" Disabled="@busy">Save provider</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestEditingAsync" Disabled="@busy">Test</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="CancelEdit" Disabled="@busy">Cancel</MudButton>
+                </div>
+            </MudPaper>
+        }
+
+        @if (providers.Count > 0)
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle1">Web search</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                Models from these providers can't browse the web on their own, so the agent calls a search service you choose.
+                Reading pages needs nothing extra, and never reaches your own computer or network.
+                GitHub Copilot has its own search and ignores this.
+            </MudText>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+                @foreach (var kind in Enum.GetValues<SearchKind>())
+                {
+                    var k = kind;
+                    <MudChip T="string" Size="Size.Small" Variant="@(searchKind == k ? Variant.Filled : Variant.Outlined)"
+                             Color="@(searchKind == k ? Color.Primary : Color.Default)"
+                             OnClick="() => searchKind = k">@SearchLabel(k)</MudChip>
+                }
+            </div>
+            @switch (searchKind)
+            {
+                case SearchKind.Brave:
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Get a key from the <MudLink Href="https://brave.com/search/api/" Target="_blank">Brave Search API</MudLink> (it has a free tier).</MudText>
+                    break;
+                case SearchKind.Tavily:
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Get a key from <MudLink Href="https://tavily.com" Target="_blank">Tavily</MudLink> (it has a free tier).</MudText>
+                    break;
+                case SearchKind.SearXNG:
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Your own <MudLink Href="https://docs.searxng.org" Target="_blank">SearXNG</MudLink> instance: free and keyless. Enable <code>json</code> under <code>search.formats</code> in its settings.yml.</MudText>
+                    break;
+            }
+            @if (searchKind is SearchKind.Brave or SearchKind.Tavily)
+            {
+                <MudTextField T="string" Immediate="true" @bind-Value="searchKey" Label="API key" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2"
+                              Placeholder="@(searchHasKey && search.Kind == searchKind ? "•••• saved (leave blank to keep)" : "")" />
+            }
+            else if (searchKind == SearchKind.SearXNG)
+            {
+                <MudTextField T="string" Immediate="true" @bind-Value="searchEndpoint" Label="SearXNG URL" Placeholder="http://localhost:8080" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+            }
+            <Feedback Text="@searchMsg" IsError="@searchErr" />
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="mt-2" OnClick="SaveSearchAsync" Disabled="@busy">Save search</MudButton>
+        }
+
+        <Feedback Text="@msg" IsError="@err" />
+    </div>
+    <div class="sp-card-footer">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveAsync" Disabled="@busy">Save</MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestAsync" Disabled="@busy">
+            @if (testing) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" /> }
+            Test connection
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    /// <summary>Names of the enabled platforms the finder can search, e.g. "X and LinkedIn".</summary>
+    [Parameter] public string PlatformNames { get; set; } = "";
+
+    private bool busy, testing, enabled = true, auto = true, loaded;
+    private string activeId = AgentSettingsStore.CopilotId;
+    private IReadOnlyList<AgentProvider> providers = [];
+    private SearchSettings search = SearchSettings.Disabled;
+    private string? msg, providerMsg, searchMsg;
+    private bool err, providerErr, searchErr;
+
+    // GitHub Copilot
+    private bool cpHasToken;
+    private bool? cpOk;
+    private string? cpModel, cpToken;
+    private IReadOnlyList<string> cpModels = [];
+
+    // Provider editor
+    private AgentProvider? editing;
+    private string? presetName, confirmRemoveId;
+    private string editName = "", editUrl = "", editKey = "", editModel = "";
+    private bool editHasKey;
+
+    // Search editor
+    private SearchKind searchKind;
+    private string? searchEndpoint, searchKey;
+    private bool searchHasKey;
+
+    private AgentProvider? activeProvider => providers.FirstOrDefault(p => p.Id == activeId);
+    private string ModelPlaceholder => AgentProviderPresets.All.FirstOrDefault(p => p.Name == presetName)?.ModelExample is { Length: > 0 } m ? m : "gpt-4o-mini";
+
+    private bool IsReady => enabled && (activeProvider is null ? cpOk == true : search.Kind != SearchKind.None);
+
+    private static string SearchLabel(SearchKind kind) => kind == SearchKind.None ? "No search" : kind.ToString();
+
+    private static string HostOf(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Authority : url;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded) return;
+        await LoadAsync();
+        loaded = true;
+    }
+
+    private async Task LoadAsync(bool refreshFields = true)
+    {
+        var settings = await Finder.GetSettingsAsync();
+        enabled = settings.Enabled;
+        auto = settings.AutoSearch;
+        activeId = await AgentStore.GetActiveIdAsync();
+        providers = await AgentStore.GetProvidersAsync();
+        search = await AgentStore.GetSearchAsync();
+        searchHasKey = search.ApiKey is not null;
+        cpHasToken = await Secrets.GetAsync(CopilotSettingKeys.GitHubToken) is not null;
+        if (refreshFields)
+        {
+            cpModel = await Secrets.GetAsync(CopilotSettingKeys.Model);
+            searchKind = search.Kind;
+            searchEndpoint = search.Endpoint;
+        }
+    }
+
+    private async Task Run(Func<Task> action, Action<string, bool> report)
+    {
+        busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException or Microsoft.EntityFrameworkCore.DbUpdateException or IOException or System.Security.Cryptography.CryptographicException)
+        {
+            report(ex.Message, true);
+        }
+        finally
+        {
+            busy = false;
+            await LoadAsync(refreshFields: false);
+        }
+    }
+
+    private void Report(string m, bool e) => (msg, err) = (m, e);
+    private void ReportProvider(string m, bool e) => (providerMsg, providerErr) = (m, e);
+    private void ReportSearch(string m, bool e) => (searchMsg, searchErr) = (m, e);
+
+    private Task SelectAsync(string id) => Run(async () =>
+    {
+        confirmRemoveId = null;
+        await AgentStore.SetActiveAsync(id);
+        var name = id == AgentSettingsStore.CopilotId ? "GitHub Copilot" : providers.FirstOrDefault(p => p.Id == id)?.Name ?? "the provider";
+        Report($"The account finder will use {name}.", false);
+    }, Report);
+
+    private Task SaveAsync() => Run(async () =>
+    {
+        var values = new Dictionary<string, string?>
+        {
+            [CopilotSettingKeys.Enabled] = enabled ? null : "false",
+            [CopilotSettingKeys.AutoSearch] = auto ? null : "false",
+            [CopilotSettingKeys.Model] = string.IsNullOrWhiteSpace(cpModel) ? null : cpModel.Trim(),
+        };
+        if (!string.IsNullOrWhiteSpace(cpToken)) values[CopilotSettingKeys.GitHubToken] = cpToken.Trim();
+        await Secrets.SetManyAsync(values);
+        cpToken = null;
+        Report("Saved.", false);
+    }, Report);
+
+    private Task ClearCopilotTokenAsync() => Run(async () =>
+    {
+        await Secrets.SetAsync(CopilotSettingKeys.GitHubToken, null);
+        Report("Token removed. Copilot will use your signed-in account.", false);
+    }, Report);
+
+    private async Task TestAsync()
+    {
+        testing = true;
+        await Run(async () =>
+        {
+            if (activeProvider is { } provider)
+            {
+                Report(await Finder.TestProviderAsync(provider, search), false);
+                return;
+            }
+
+            var preview = await Secrets.CreatePreviewAsync(new Dictionary<string, string?>
+            {
+                [CopilotSettingKeys.Model] = string.IsNullOrWhiteSpace(cpModel) ? null : cpModel.Trim(),
+                [CopilotSettingKeys.GitHubToken] = string.IsNullOrWhiteSpace(cpToken) ? await Secrets.GetAsync(CopilotSettingKeys.GitHubToken) : cpToken.Trim(),
+            });
+            await using var finder = ActivatorUtilities.CreateInstance<AccountFinder>(Services, preview);
+            cpModels = await finder.ListModelsAsync();
+            cpOk = true;
+            var model = string.IsNullOrWhiteSpace(cpModel) ? AccountFinder.DefaultModel : cpModel.Trim();
+            Report(cpModels.Contains(model)
+                ? $"Connected to GitHub Copilot. {cpModels.Count} models available, including {model}."
+                : $"Connected, but the model '{model}' isn't available to you. Pick one from the list.", !cpModels.Contains(model));
+        }, (m, e) => { if (activeProvider is null) cpOk = false; Report(m, e); });
+        testing = false;
+    }
+
+    private void StartAdd()
+    {
+        confirmRemoveId = null;
+        providerMsg = null;
+        editing = new AgentProvider("", "", "", null, "");
+        editKey = "";
+        editHasKey = false;
+        ApplyPreset(AgentProviderPresets.All[0]);
+    }
+
+    private void StartEdit(AgentProvider provider)
+    {
+        confirmRemoveId = null;
+        providerMsg = null;
+        editing = provider;
+        presetName = null;
+        (editName, editUrl, editModel) = (provider.Name, provider.BaseUrl, provider.Model);
+        editKey = "";
+        editHasKey = provider.ApiKey is not null;
+    }
+
+    private void CancelEdit()
+    {
+        editing = null;
+        providerMsg = null;
+    }
+
+    private void ApplyPreset(AgentProviderPreset preset)
+    {
+        var previous = AgentProviderPresets.All.FirstOrDefault(p => p.Name == presetName);
+        // Replace values the previous preset filled in, but keep anything the user typed.
+        if (string.IsNullOrWhiteSpace(editName) || editName == previous?.Name) editName = preset.Name == "Custom" ? "" : preset.Name;
+        if (string.IsNullOrWhiteSpace(editModel) || editModel == previous?.ModelExample) editModel = "";
+        editUrl = preset.BaseUrl;
+        presetName = preset.Name;
+    }
+
+    private AgentProvider EditedProvider() => new(editing?.Id ?? "", editName, editUrl, string.IsNullOrWhiteSpace(editKey) ? editing?.ApiKey : editKey, editModel);
+
+    private Task SaveProviderAsync() => Run(async () =>
+    {
+        var wasNew = editing!.Id.Length == 0;
+        var saved = await AgentStore.SaveProviderAsync(EditedProvider() with { ApiKey = string.IsNullOrWhiteSpace(editKey) ? null : editKey });
+        editing = null;
+        editKey = "";
+        Report(wasNew ? $"Added {saved.Name}. Select it above to use it." : $"Saved {saved.Name}.", false);
+    }, ReportProvider);
+
+    private async Task TestEditingAsync()
+    {
+        testing = true;
+        await Run(async () => ReportProvider(await Finder.TestProviderAsync(EditedProvider(), search), false), ReportProvider);
+        testing = false;
+    }
+
+    private Task RemoveAsync(AgentProvider provider) => Run(async () =>
+    {
+        if (confirmRemoveId != provider.Id)
+        {
+            confirmRemoveId = provider.Id;
+            return;
+        }
+        confirmRemoveId = null;
+        await AgentStore.RemoveProviderAsync(provider.Id);
+        Report($"Removed {provider.Name}. The account finder is back on GitHub Copilot.", false);
+    }, Report);
+
+    private Task SaveSearchAsync() => Run(async () =>
+    {
+        var saved = await AgentStore.SaveSearchAsync(new SearchSettings(searchKind, searchEndpoint, searchKey));
+        searchKey = null;
+        ReportSearch(saved.Kind == SearchKind.None ? "Web search turned off." : $"Saved. The agent will search with {saved.Kind}.", false);
+    }, ReportSearch);
+}

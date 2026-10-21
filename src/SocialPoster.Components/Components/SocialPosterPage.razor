@@ -1,0 +1,13 @@
+@page "/socialposter"
+@page "/socialposter/{Section}"
+@inherits PlatformComponent
+
+<SocialPosterView Section="@Section" Platforms="@Platforms" EnableScheduling="@EnableScheduling" />
+
+@code {
+    /// <summary>Shows scheduling in the composer. Defaults to true.</summary>
+    [Parameter] public bool EnableScheduling { get; set; } = true;
+
+    /// <summary>The section supplied by the built-in prefixed routes.</summary>
+    [Parameter] public string? Section { get; set; }
+}

@@ -1,0 +1,149 @@
+@inject ContactService ContactSvc
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-3">Review both contacts. Similarity is not proof of identity. @(ImportMode ? "The incoming account is not saved. The saved contact keeps its metadata." : "Choose a survivor.") Resolve every platform collision before confirming.</MudText>
+        @foreach (var contact in new[] { Preview.Left, Preview.Right })
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <div class="d-flex align-center gap-2 mb-2">
+                    <Avatar Url="@contact.AvatarUrl" Name="@contact.DisplayName" Size="48" />
+                    <MudText Typo="Typo.h6">@contact.DisplayName — @MentionTemplate.Token(contact.Key)</MudText>
+                </div>
+                <MudText>Bio: @contact.Bio</MudText>
+                <MudText>Source: @contact.Source · Created: @contact.CreatedAtUtc · Used: @contact.UseCount · Last used: @contact.LastUsedAtUtc</MudText>
+                @foreach (var platform in Enum.GetValues<Platform>())
+                {
+                    <MudText>@IdentityDescription(contact, platform)</MudText>
+                    @if (ProfileUrl(contact, platform) is { } url)
+                    {
+                        <MudButton Href="@url" Target="_blank" rel="noopener noreferrer"
+                                   Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">
+                            Open @PlatformInfo.Label(platform) profile
+                        </MudButton>
+                    }
+                }
+            </MudPaper>
+        }
+        @if (!ImportMode)
+        {
+            <MudSelect T="int" @bind-Value="survivorId" @bind-Value:after="ResetConfirmation" Label="Surviving contact" Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem T="int" Value="0">Choose a survivor</MudSelectItem>
+                @foreach (var contact in new[] { Preview.Left, Preview.Right })
+                {
+                    <MudSelectItem T="int" Value="@contact.Id">@contact.DisplayName (@contact.Key)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @foreach (var platform in Preview.Collisions)
+        {
+            <MudSelect T="int" Value="@choices.GetValueOrDefault(platform)" ValueChanged="value => SetChoice(platform, value)"
+                       Label="@($"Keep which {PlatformInfo.Label(platform)} identity?")" Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem T="int" Value="0">Resolve collision</MudSelectItem>
+                @foreach (var contact in new[] { Preview.Left, Preview.Right })
+                {
+                    <MudSelectItem T="int" Value="@contact.Id">@contact.Key: @IdentityDescription(contact, platform)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudAlert Severity="Severity.Warning">
+            The survivor keeps its key, name, bio, avatar, source and creation time, including user edits.
+            Complementary identities and usage counts are combined; latest usage time is kept.
+            Each selected identity replaces the whole conflicting platform identity, including its verification.
+            @if (ImportMode)
+            {
+                <span>No incoming row or key has been saved. Existing keys, aliases, history and usage remain attached to the saved contact. The decision is rechecked before saving.</span>
+            }
+            else
+            {
+                <span>The other contact row is deleted. Its key and any earlier aliases still resolve to the survivor in templates, history and browser drafts.</span>
+            }
+            Conflicting or running discovery caches are explicitly invalidated. This cannot be undone.
+        </MudAlert>
+        <MudCheckBox T="bool" @bind-Value="confirmed" Label="I confirm these are the same contact and approve this merge" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()" Disabled="@busy">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanMerge || busy)" OnClick="MergeAsync">Confirm merge</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public ContactMergePreview Preview { get; set; } = default!;
+    [Parameter] public bool ImportMode { get; set; }
+    protected override void OnInitialized()
+    {
+        if (ImportMode) survivorId = Preview.Left.Id;
+    }
+    private int survivorId;
+    private readonly Dictionary<Platform, int> choices = [];
+    private bool confirmed;
+    private bool busy;
+    private string? error;
+    private bool CanMerge => confirmed && (survivorId == Preview.Left.Id || survivorId == Preview.Right.Id) &&
+        Preview.Collisions.All(p => choices.TryGetValue(p, out var id) && (id == Preview.Left.Id || id == Preview.Right.Id));
+
+    private void SetChoice(Platform platform, int id)
+    {
+        if (id == 0) choices.Remove(platform); else choices[platform] = id;
+        ResetConfirmation();
+    }
+
+    private void ResetConfirmation() => confirmed = false;
+
+    private async Task MergeAsync()
+    {
+        if (!CanMerge || busy) return;
+        busy = true;
+        try
+        {
+            if (ImportMode)
+            {
+                Dialog.Close(DialogResult.Ok(new ContactImportDecision(ImportReviewAction.Merge,
+                    survivorId, new Dictionary<Platform, int>(choices), Confirmed: true)));
+                return;
+            }
+            await ContactSvc.MergeAsync(Preview, survivorId, choices);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private static string IdentityDescription(Contact c, Platform p) => p switch
+    {
+        Platform.X => $"X: {c.XUsername ?? "(none)"} · ID: {c.XUserId ?? "(none)"} · verified: {c.XVerifiedByCopilotAtUtc}",
+        Platform.Bluesky => $"Bluesky: {c.BlueskyHandle ?? "(none)"} · DID: {c.BlueskyDid ?? "(none)"}",
+        Platform.Mastodon => $"Mastodon: {c.MastodonAcct ?? "(none)"} · Actor: {c.MastodonUri ?? "(none)"} · Profile: {c.MastodonProfileUrl ?? "(none)"}",
+        _ => $"LinkedIn: {c.LinkedInName ?? "(none)"} · {c.LinkedInProfileUrl ?? "(none)"} · URN: {c.LinkedInUrn ?? "(none)"} · verified: {c.LinkedInVerifiedByCopilotAtUtc}"
+    };
+
+    private static string? ProfileUrl(Contact contact, Platform platform)
+    {
+        if (platform == Platform.Mastodon) return MastodonIdentity.ProfileUrl(contact.MastodonAcct);
+        if (platform == Platform.X && !string.IsNullOrWhiteSpace(contact.XUsername))
+            return AccountCandidates.Normalize([new("X", null, contact.XUsername, null, null, 100, null)])
+                .SingleOrDefault()?.Url;
+        if (platform == Platform.Bluesky)
+        {
+            var identity = !string.IsNullOrWhiteSpace(contact.BlueskyDid) ? contact.BlueskyDid : contact.BlueskyHandle;
+            return string.IsNullOrWhiteSpace(identity) ? null : $"https://bsky.app/profile/{Uri.EscapeDataString(identity.Trim().TrimStart('@'))}";
+        }
+        if (platform == Platform.LinkedIn)
+        {
+            if (!string.IsNullOrWhiteSpace(contact.LinkedInProfileUrl))
+                return AccountCandidates.Normalize([new("LinkedIn", null, contact.LinkedInProfileUrl, null, null, 100, null)])
+                    .SingleOrDefault()?.Url;
+            const string prefix = "urn:li:organization:";
+            if (contact.LinkedInUrn?.StartsWith(prefix, StringComparison.Ordinal) == true &&
+                contact.LinkedInUrn[prefix.Length..] is { Length: > 0 } id && id.All(char.IsAsciiDigit))
+                return $"https://www.linkedin.com/company/{id}";
+        }
+        return null;
+    }
+}

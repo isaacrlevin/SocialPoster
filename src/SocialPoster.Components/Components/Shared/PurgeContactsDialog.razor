@@ -1,0 +1,47 @@
+@inject ContactService ContactSvc
+
+<MudDialog>
+    <DialogContent>
+        <MudAlert Severity="Severity.Warning" Class="mb-3">
+            Remove ALL @PlatformInfo.Label(TargetPlatform) identities across ALL contacts and accounts, not just the current filter.
+            This clears handles, profile URLs, platform names, identity IDs/URNs, verification timestamps and cached discovery candidates for that platform.
+            Contacts with no remaining accounts are deleted, including their template keys, merge aliases and cached searches.
+            Mentions of deleted contacts become unknown. Contacts with other accounts and published history are preserved. This cannot be undone.
+        </MudAlert>
+        <MudText>@impactCount contacts currently have identity or verification data to remove. Cached candidates are cleared even when this count is zero.</MudText>
+        <MudText Class="mt-2">Future explicit imports, searches or bio refreshes can link accounts again. In-flight discovery results will be discarded.</MudText>
+        <MudCheckBox T="bool" @bind-Value="confirmed" Label="@($"I confirm removal of all {PlatformInfo.Label(TargetPlatform)} identities")" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()" Disabled="@busy">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(!confirmed || busy)" OnClick="PurgeAsync">Purge all @PlatformInfo.Label(TargetPlatform) identities</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Platform TargetPlatform { get; set; }
+    private int impactCount;
+    private bool confirmed;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync() => impactCount = await ContactSvc.CountPurgeAsync(TargetPlatform);
+
+    private async Task PurgeAsync()
+    {
+        if (!confirmed || busy) return;
+        busy = true;
+        try
+        {
+            await ContactSvc.PurgePlatformAsync(TargetPlatform);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

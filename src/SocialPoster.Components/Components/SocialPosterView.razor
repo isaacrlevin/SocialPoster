@@ -1,0 +1,40 @@
+@inherits PlatformComponent
+@implements IDisposable
+
+<CascadingValue Value="@AvailablePlatforms">
+    <LayoutView Layout="typeof(MainLayout)">
+        @switch (Section?.ToLowerInvariant())
+        {
+            case null:
+            case "":
+                <SocialPoster.Components.Pages.Home EnableScheduling="@EnableScheduling" />
+                break;
+            case "contacts":
+                <SocialPoster.Components.Pages.Contacts />
+                break;
+            case "history":
+                <SocialPoster.Components.Pages.History />
+                break;
+            case "settings":
+                <SocialPoster.Components.Pages.Settings />
+                break;
+            default:
+                <SocialPoster.Components.Pages.NotFound />
+                break;
+        }
+    </LayoutView>
+</CascadingValue>
+
+@code {
+    /// <summary>Section to display: empty for Compose, or contacts, history, settings.</summary>
+    [Parameter] public string? Section { get; set; }
+
+    /// <summary>Shows scheduling in the composer. Defaults to true.</summary>
+    [Parameter] public bool EnableScheduling { get; set; } = true;
+
+    protected override void OnInitialized() => Preferences.Changed += OnPlatformsChanged;
+
+    private void OnPlatformsChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Preferences.Changed -= OnPlatformsChanged;
+}

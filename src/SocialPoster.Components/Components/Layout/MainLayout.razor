@@ -1,0 +1,55 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+<MudThemeProvider @ref="themeProvider" Theme="AppTheme.Theme" @bind-IsDarkMode="isDark" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0" Class="sp-appbar">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="() => drawerOpen = !drawerOpen" aria-label="Toggle navigation" />
+        <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Default" Style="opacity:.7">One post. Your platforms. Mentions that actually work.</MudText>
+        <MudSpacer />
+        <MudTooltip Text="@(isDark ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton Icon="@(isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="ToggleThemeAsync" aria-label="Toggle dark mode" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="drawerOpen" Elevation="0" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Class="sp-drawer">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent Class="sp-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">&times;</span>
+</div>
+
+@code {
+    private MudThemeProvider? themeProvider;
+    private bool isDark;
+    private bool drawerOpen = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || themeProvider is null) return;
+
+        var saved = await JS.InvokeAsync<string?>("socialPoster.getTheme");
+        isDark = saved is null ? await themeProvider.GetSystemDarkModeAsync() : saved == "dark";
+        StateHasChanged();
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        isDark = !isDark;
+        await JS.InvokeVoidAsync("socialPoster.setTheme", isDark ? "dark" : "light");
+    }
+}

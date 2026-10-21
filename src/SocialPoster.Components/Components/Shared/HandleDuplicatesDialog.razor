@@ -1,0 +1,20 @@
+<MudDialog>
+    <DialogContent>
+        <MudText>Handle possible duplicates before the follow sync completes? Reviewing pauses each incoming account before it is saved, using the manual merge identity review. Similar names only suggest a review; nothing is merged automatically.</MudText>
+        <MudText Class="mt-3">Sync without handling keeps the existing safeguards: ambiguous identities are skipped and conflicting bio links are not applied. Cancel makes no import requests.</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Choose(null)">Cancel</MudButton>
+        <MudButton OnClick="() => Choose(false)">Sync without handling</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="() => Choose(true)">Yes, review</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    private void Choose(bool? review)
+    {
+        if (review is null) Dialog.Cancel();
+        else Dialog.Close(DialogResult.Ok(review.Value));
+    }
+}

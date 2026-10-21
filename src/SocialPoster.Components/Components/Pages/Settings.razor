@@ -1,0 +1,457 @@
+@inject IHttpClientFactory HttpClients
+@inject SecretStore Secrets
+@inject BlueskyClient BlueskyApi
+@inject XClient XApi
+@inject LinkedInClient LinkedInApi
+@inject MastodonClient MastodonApi
+@inject ThreadsClient ThreadsApi
+@inherits PlatformComponent
+
+<PageTitle>Accounts · SocialPoster</PageTitle>
+
+<PageHeader Title="Accounts" Subtitle="Connect the platforms you want to publish to." />
+
+<MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
+    <MudText Typo="Typo.h6">Selected platforms</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        Choose the platforms you use. Changes save automatically and apply throughout the app.
+        Turning a platform off keeps its saved credentials and contacts.
+    </MudText>
+    <div class="d-flex flex-wrap gap-3">
+        @foreach (var platform in AvailablePlatforms.Platforms)
+        {
+            <MudSwitch T="bool" Value="@EnabledPlatforms.Contains(platform)"
+                       ValueChanged="@(enabled => SetPlatformAsync(platform, enabled))"
+                       Disabled="@busy" Color="Color.Primary" Label="@PlatformInfo.Label(platform)" />
+        }
+    </div>
+    @if (EnabledPlatforms.Platforms.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No platforms selected. Enable a platform above to configure it.</MudText>
+    }
+    <Feedback Text="@platformMsg" IsError="@platformErr" />
+</MudPaper>
+
+<MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Lock" Class="mb-6">
+    Credentials are stored only on this computer, in a local SQLite database encrypted with ASP.NET Core Data Protection
+    (keys are protected with DPAPI on Windows; on Linux/macOS they rely on owner-only file permissions).
+</MudAlert>
+
+<MudGrid Spacing="4">
+    @if (EnabledPlatforms.Contains(Platform.Bluesky))
+    {
+    <MudItem xs="12" lg="4">
+        <MudPaper Class="sp-card h-100 d-flex flex-column" Elevation="0">
+            <div class="sp-card-header platform-bluesky" style="border-top:0 !important">
+                <span class="platform-icon" style="background:#1185fe">🦋</span>
+                <MudText Typo="Typo.h6">Bluesky</MudText>
+                <StatusBadge Ok="@bskyOk" />
+            </div>
+            <div class="sp-card-body flex-grow-1">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Search and follows sync work without logging in. To publish, create an
+                    <MudLink Href="https://bsky.app/settings/app-passwords" Target="_blank">app password</MudLink>.
+                </MudText>
+                <MudStack Spacing="2">
+                    <MudTextField T="string" Immediate="true" @bind-Value="bskyHandle" Label="Your handle" Placeholder="you.bsky.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="bskyPassword" Label="App password" InputType="InputType.Password" Placeholder="@(bskyHasPassword ? "•••• saved" : "xxxx-xxxx-xxxx-xxxx")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudExpansionPanels Elevation="0" Class="sp-advanced">
+                        <MudExpansionPanel Text="Advanced" Dense="true">
+                            <MudTextField T="string" Immediate="true" @bind-Value="bskyService" Label="PDS / service URL" Placeholder="https://bsky.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                </MudStack>
+                <Feedback Text="@bskyMsg" IsError="@bskyErr" />
+            </div>
+            <div class="sp-card-footer">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveBlueskyAsync" Disabled="@busy">Save</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestBlueskyAsync" Disabled="@busy">Test login</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    }
+    @if (EnabledPlatforms.Contains(Platform.X))
+    {
+    <MudItem xs="12" lg="4">
+        <MudPaper Class="sp-card h-100 d-flex flex-column" Elevation="0">
+            <div class="sp-card-header">
+                <span class="platform-icon" style="background:#111">𝕏</span>
+                <MudText Typo="Typo.h6">X</MudText>
+                <StatusBadge Ok="@(xOk || xUseIntent)" />
+            </div>
+            <div class="sp-card-body flex-grow-1">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Create an app in the <MudLink Href="https://developer.x.com/en/portal/dashboard" Target="_blank">X developer portal</MudLink> with <em>Read and write</em> permissions,
+                    then generate an Access Token and Secret for your account. Posts and lookups count toward your X API plan.
+                </MudText>
+                <MudStack Spacing="2">
+                    <MudTextField T="string" Immediate="true" @bind-Value="xConsumerKey" Label="API Key (consumer key)" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[0])" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="xConsumerSecret" Label="API Key Secret" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[1])" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="xAccessToken" Label="Access Token" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[2])" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="xAccessSecret" Label="Access Token Secret" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[3])" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudStack>
+                <MudSwitch T="bool" @bind-Value="xUseIntent" Color="Color.Primary" Class="mt-2" Label="Post via browser instead (free, no API access needed)" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Opens x.com with your post pre-filled; you click Post yourself there. Skips the X API entirely, so credentials above aren't required for posting (they're still used to Verify accounts).</MudText>
+                <Feedback Text="@xMsg" IsError="@xErr" />
+            </div>
+            <div class="sp-card-footer">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveXAsync" Disabled="@busy">Save</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestXAsync" Disabled="@busy">Test</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ClearXAsync" Disabled="@busy">Remove</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    }
+    @if (EnabledPlatforms.Contains(Platform.LinkedIn))
+    {
+    <MudItem xs="12" lg="4">
+        <MudPaper Class="sp-card h-100 d-flex flex-column" Elevation="0">
+            <div class="sp-card-header">
+                <span class="platform-icon" style="background:#0a66c2">in</span>
+                <MudText Typo="Typo.h6">LinkedIn</MudText>
+                <StatusBadge Ok="@liOk" />
+            </div>
+            <div class="sp-card-body flex-grow-1">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Paste an existing access token with <code>openid</code>, <code>profile</code>, and <code>w_member_social</code> permissions.
+                    SocialPoster uses this token as-is and does not generate or revoke LinkedIn tokens.
+                </MudText>
+                <MudStack Spacing="2">
+                    <MudTextField T="string" Immediate="true" @bind-Value="liAccessToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(liHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="liVersion" Label="API version (YYYYMM)" Placeholder="@LinkedInClient.DefaultApiVersion" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudStack>
+                @if (liName is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-2">Connected as <strong>@liName</strong></MudText>
+                }
+                <Feedback Text="@liMsg" IsError="@liErr" />
+            </div>
+            <div class="sp-card-footer">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveLinkedInAsync" Disabled="@busy">Save</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestLinkedInAsync" Disabled="@busy">Verify token</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ForgetLinkedInAsync" Disabled="@busy">Forget token</MudButton>
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    }
+        @if (EnabledPlatforms.Contains(Platform.Mastodon))
+    {
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="sp-card h-100 d-flex flex-column" Elevation="0">
+                <div class="sp-card-header">
+                    <span class="platform-icon" style="background:#6364ff">Ⓜ</span>
+                    <MudText Typo="Typo.h6">Mastodon</MudText>
+                    <StatusBadge Ok="@mastodonOk" />
+                </div>
+                <div class="sp-card-body flex-grow-1">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        On your own instance, open Preferences → Development, create an application and copy its access token.
+                        Grant read:accounts, read:search, write:statuses and write:media. Posts are public.
+                        Use your account's home server, not a profile URL. A different instance requires its own token.
+                    </MudText>
+                    <MudTextField T="string" Immediate="true" @bind-Value="mastodonInstance" Label="Instance URL" Placeholder="https://mastodon.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField T="string" Immediate="true" @bind-Value="mastodonToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(mastodonHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <Feedback Text="@mastodonMsg" IsError="@mastodonErr" />
+                </div>
+                <div class="sp-card-footer">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveMastodonAsync" Disabled="@busy">Save and verify</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestMastodonAsync" Disabled="@busy">Test connection</MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="ForgetMastodonAsync" Disabled="@busy">Forget token</MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+    @if (EnabledPlatforms.Contains(Platform.Threads))
+    {
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="sp-card h-100 d-flex flex-column" Elevation="0">
+                <div class="sp-card-header">
+                    <span class="platform-icon" style="background:#000">@@</span>
+                    <MudText Typo="Typo.h6">Threads</MudText>
+                    <StatusBadge Ok="@threadsOk" />
+                </div>
+                <div class="sp-card-body flex-grow-1">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        Create an app in the <MudLink Href="https://developers.facebook.com/apps" Target="_blank">Meta developer portal</MudLink> with the Threads API,
+                        add your account as a Threads tester, and generate a user access token with <code>threads_basic</code> and
+                        <code>threads_content_publish</code>. Posts are text only: the Threads API can't take uploaded media.
+                    </MudText>
+                    <MudTextField T="string" Immediate="true" @bind-Value="threadsToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(threadsHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    @if (threadsUsername is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">Connected as <strong>@@@threadsUsername</strong></MudText>
+                    }
+                    <Feedback Text="@threadsMsg" IsError="@threadsErr" />
+                </div>
+                <div class="sp-card-footer">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveThreadsAsync" Disabled="@busy">Save and verify</MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestThreadsAsync" Disabled="@busy">Test connection</MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="ForgetThreadsAsync" Disabled="@busy">Forget token</MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+    @if (EnabledPlatforms.Searchable.Count > 0)
+    {
+    <MudItem xs="12">
+        <AgentSettingsCard PlatformNames="@SearchablePlatformNames" />
+    </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private bool busy;
+    private string? platformMsg;
+    private bool platformErr;
+
+    private async Task SetPlatformAsync(Platform platform, bool enabled)
+    {
+        busy = true;
+        platformMsg = null;
+        try
+        {
+            await Preferences.SetEnabledAsync(platform, enabled);
+            platformErr = false;
+            platformMsg = "Platform selection saved.";
+        }
+        catch (Exception ex) when (ex is Microsoft.EntityFrameworkCore.DbUpdateException or IOException or InvalidOperationException or System.Security.Cryptography.CryptographicException)
+        {
+            platformErr = true;
+            platformMsg = $"Couldn't update the platform selection: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private string? bskyHandle, bskyPassword, bskyService, bskyMsg;
+    private bool bskyHasPassword, bskyErr, bskyOk;
+
+    private string? xConsumerKey, xConsumerSecret, xAccessToken, xAccessSecret, xMsg;
+    private bool[] xHas = new bool[4];
+    private bool xErr, xOk, xUseIntent;
+
+    private string? liAccessToken, liVersion, liName, liMsg;
+    private bool liHasToken, liErr, liOk;
+    private string? mastodonInstance, mastodonToken, mastodonMsg;
+    private bool mastodonHasToken, mastodonErr, mastodonOk;
+    private string? threadsToken, threadsUsername, threadsMsg;
+    private bool threadsHasToken, threadsErr, threadsOk;
+
+    private static string Placeholder(bool saved) => saved ? "•••• saved (leave blank to keep)" : "";
+
+    private bool loaded;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded) return;
+        await LoadAsync();
+        loaded = true;
+    }
+
+    private async Task LoadAsync(bool refreshFields = true)
+    {
+        if (AvailablePlatforms.Contains(Platform.Mastodon))
+        {
+            if (refreshFields) mastodonInstance = await Secrets.GetAsync(SettingKeys.MastodonInstance);
+            mastodonHasToken = await Secrets.GetAsync(SettingKeys.MastodonAccessToken) is not null;
+            mastodonOk = await MastodonApi.IsConfiguredAsync();
+        }
+        if (AvailablePlatforms.Contains(Platform.Threads))
+        {
+            threadsHasToken = await Secrets.GetAsync(SettingKeys.ThreadsAccessToken) is not null;
+            threadsOk = await ThreadsApi.IsConfiguredAsync();
+        }
+        if (AvailablePlatforms.Contains(Platform.Bluesky))
+        {
+            if (refreshFields) bskyHandle = await Secrets.GetAsync(SettingKeys.BlueskyHandle);
+            if (refreshFields) bskyService = await Secrets.GetAsync(SettingKeys.BlueskyService);
+            bskyHasPassword = await Secrets.GetAsync(SettingKeys.BlueskyAppPassword) is not null;
+            bskyOk = await BlueskyApi.IsConfiguredAsync();
+        }
+
+        if (AvailablePlatforms.Contains(Platform.X))
+        {
+            string[] xKeys = [SettingKeys.XConsumerKey, SettingKeys.XConsumerSecret, SettingKeys.XAccessToken, SettingKeys.XAccessTokenSecret];
+            for (var i = 0; i < xKeys.Length; i++) xHas[i] = await Secrets.GetAsync(xKeys[i]) is not null;
+            xOk = await XApi.IsConfiguredAsync();
+            if (refreshFields) xUseIntent = await Secrets.GetAsync(SettingKeys.XPostMethod) == "intent";
+        }
+
+        if (AvailablePlatforms.Contains(Platform.LinkedIn))
+        {
+            liHasToken = await Secrets.GetAsync(SettingKeys.LinkedInAccessToken) is not null;
+            if (refreshFields) liVersion = await Secrets.GetAsync(SettingKeys.LinkedInApiVersion);
+            liName = await Secrets.GetAsync(SettingKeys.LinkedInName);
+            liOk = await LinkedInApi.IsConfiguredAsync();
+        }
+    }
+
+    private async Task<Dictionary<string, string?>> ValuesAsync(params (string Key, string? Value, bool Secret)[] fields)
+    {
+        var values = new Dictionary<string, string?>();
+        foreach (var (key, value, secret) in fields)
+            values[key] = secret && string.IsNullOrWhiteSpace(value)
+                ? await Secrets.GetAsync(key) : string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        return values;
+    }
+
+    private Task<Dictionary<string, string?>> BlueskyValues() => ValuesAsync(
+        (SettingKeys.BlueskyHandle, bskyHandle?.Trim().TrimStart('@'), false),
+        (SettingKeys.BlueskyService, bskyService, false), (SettingKeys.BlueskyAppPassword, bskyPassword, true));
+    private Task<Dictionary<string, string?>> XValues() => ValuesAsync(
+        (SettingKeys.XConsumerKey, xConsumerKey, true), (SettingKeys.XConsumerSecret, xConsumerSecret, true),
+        (SettingKeys.XAccessToken, xAccessToken, true), (SettingKeys.XAccessTokenSecret, xAccessSecret, true),
+        (SettingKeys.XPostMethod, xUseIntent ? "intent" : null, false));
+    private Task<Dictionary<string, string?>> LinkedInValues() => ValuesAsync(
+        (SettingKeys.LinkedInAccessToken, liAccessToken, true), (SettingKeys.LinkedInApiVersion, liVersion, false));
+
+    private async Task Run(Func<Task> action, Action<string, bool> report)
+    {
+        busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException or Microsoft.EntityFrameworkCore.DbUpdateException or IOException or System.Security.Cryptography.CryptographicException)
+        {
+            report(ex.Message, true);
+        }
+        finally
+        {
+            busy = false;
+            await LoadAsync(refreshFields: false);
+        }
+    }
+
+    private void ReportBsky(string m, bool e) => (bskyMsg, bskyErr) = (m, e);
+    private void ReportX(string m, bool e) => (xMsg, xErr) = (m, e);
+    private void ReportLi(string m, bool e) => (liMsg, liErr) = (m, e);
+    private void ReportMastodon(string m, bool e) => (mastodonMsg, mastodonErr) = (m, e);
+
+    private Task SaveMastodonAsync() => Run(async () =>
+    {
+        var account = await MastodonApi.ConfigureAsync(mastodonInstance, mastodonToken);
+        mastodonToken = null;
+        ReportMastodon($"Saved and verified as @{account.Acct}.", false);
+    }, ReportMastodon);
+
+    private Task TestMastodonAsync() => Run(async () =>
+    {
+        var preview = await Secrets.CreatePreviewAsync(await ValuesAsync(
+            (SettingKeys.MastodonInstance, mastodonInstance, false), (SettingKeys.MastodonAccessToken, mastodonToken, true)));
+        using var http = HttpClients.CreateClient(nameof(MastodonClient));
+        var account = await new MastodonClient(http, preview).VerifyCredentialsAsync();
+        ReportMastodon($"Authenticated as @{account.Acct}.", false);
+    }, ReportMastodon);
+
+    private Task ForgetMastodonAsync() => Run(async () =>
+    {
+        await Secrets.SetAsync(SettingKeys.MastodonAccessToken, null);
+        mastodonToken = null;
+        ReportMastodon("Token forgotten locally. Revoke it on your instance if needed.", false);
+    }, ReportMastodon);
+
+    private void ReportThreads(string m, bool e) => (threadsMsg, threadsErr) = (m, e);
+
+    private Task SaveThreadsAsync() => Run(async () =>
+    {
+        var account = await ThreadsApi.ConfigureAsync(threadsToken);
+        threadsToken = null;
+        threadsUsername = account.Username;
+        ReportThreads($"Saved and verified as @{account.Username}.", false);
+    }, ReportThreads);
+
+    private Task TestThreadsAsync() => Run(async () =>
+    {
+        var preview = await Secrets.CreatePreviewAsync(await ValuesAsync((SettingKeys.ThreadsAccessToken, threadsToken, true)));
+        using var http = HttpClients.CreateClient(nameof(ThreadsClient));
+        var account = await new ThreadsClient(http, preview).VerifyCredentialsAsync();
+        threadsUsername = account.Username;
+        ReportThreads($"Authenticated as @{account.Username}.", false);
+    }, ReportThreads);
+
+    private Task ForgetThreadsAsync() => Run(async () =>
+    {
+        await Secrets.SetManyAsync(new Dictionary<string, string?>
+        {
+            [SettingKeys.ThreadsAccessToken] = null,
+            [SettingKeys.ThreadsUserId] = null,
+        });
+        threadsToken = null;
+        threadsUsername = null;
+        ReportThreads("Token forgotten locally. Revoke it in the Meta developer portal if needed.", false);
+    }, ReportThreads);
+
+    private Task SaveBlueskyAsync() => Run(async () =>
+    {
+        await Secrets.SetManyAsync(await BlueskyValues());
+        bskyPassword = null;
+        ReportBsky("Saved.", false);
+    }, ReportBsky);
+
+    private Task TestBlueskyAsync() => Run(async () =>
+    {
+        var preview = await Secrets.CreatePreviewAsync(await BlueskyValues());
+        using var http = HttpClients.CreateClient(nameof(BlueskyClient));
+        var (did, handle) = await new BlueskyClient(http, preview).VerifyLoginAsync();
+        ReportBsky($"Logged in as @{handle} ({did}).", false);
+    }, ReportBsky);
+
+    private Task SaveXAsync() => Run(async () =>
+    {
+        await Secrets.SetManyAsync(await XValues());
+        xConsumerKey = xConsumerSecret = xAccessToken = xAccessSecret = null;
+        ReportX("Saved.", false);
+    }, ReportX);
+
+    private Task TestXAsync() => Run(async () =>
+    {
+        if (xUseIntent) { ReportX("Browser posting selected. No API connection is required.", false); return; }
+        var preview = await Secrets.CreatePreviewAsync(await XValues());
+        using var http = HttpClients.CreateClient(nameof(XClient));
+        var me = await new XClient(http, preview).GetMeAsync();
+        ReportX($"Authenticated as @{me.Username}.", false);
+    }, ReportX);
+
+    private Task ClearXAsync() => Run(async () =>
+    {
+        foreach (var k in new[] { SettingKeys.XConsumerKey, SettingKeys.XConsumerSecret, SettingKeys.XAccessToken, SettingKeys.XAccessTokenSecret })
+            await Secrets.SetAsync(k, null);
+        ReportX("Removed X credentials.", false);
+    }, ReportX);
+
+    private Task SaveLinkedInAsync() => Run(async () =>
+    {
+        var values = await LinkedInValues();
+        var preview = await Secrets.CreatePreviewAsync(values);
+        using var http = HttpClients.CreateClient(nameof(LinkedInClient));
+        var name = await new LinkedInClient(http, preview).VerifyAccessTokenAsync();
+        values[SettingKeys.LinkedInPersonUrn] = await preview.GetAsync(SettingKeys.LinkedInPersonUrn);
+        values[SettingKeys.LinkedInName] = await preview.GetAsync(SettingKeys.LinkedInName);
+        await Secrets.SetManyAsync(values);
+        liAccessToken = null;
+        liName = name;
+        ReportLi($"Saved and verified for {name}.", false);
+    }, ReportLi);
+
+    private Task TestLinkedInAsync() => Run(async () =>
+    {
+        var preview = await Secrets.CreatePreviewAsync(await LinkedInValues());
+        using var http = HttpClients.CreateClient(nameof(LinkedInClient));
+        var name = await new LinkedInClient(http, preview).VerifyAccessTokenAsync();
+        ReportLi($"Token verified for {name}.", false);
+    }, ReportLi);
+
+    private Task ForgetLinkedInAsync() => Run(async () =>
+    {
+        await LinkedInApi.ForgetAccessTokenAsync();
+        liAccessToken = null;
+        liName = null;
+        liHasToken = false;
+        ReportLi("Token forgotten in this app only. This does not revoke it; LinkedIn's normal expiration still applies.", false);
+    }, ReportLi);
+}

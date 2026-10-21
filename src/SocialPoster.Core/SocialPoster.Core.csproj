@@ -1,9 +1,38 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <PackageId>SocialPoster.Core</PackageId>
+        <Version>0.5.0</Version>
+        <Authors>Isaac Levin</Authors>
+        <Description>Reusable SocialPoster app services: SQLite storage, contacts, scheduling and the Copilot account finder. Posting itself lives in SocialPoster.Posting.</Description>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/isaacrlevin/SocialPoster</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/isaacrlevin/SocialPoster</PackageProjectUrl>
+        <PackageTags>social;blazor;socialposter</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />
+        <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
+        <ProjectReference Include="..\SocialPoster.Posting\SocialPoster.Posting.csproj" />
+        <!-- Its build targets provision platform CLI assets in package consumers, not only this project. -->
+        <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.22" PrivateAssets="none" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+        <Using Include="Microsoft.Extensions.Logging" />
+        <Using Include="SocialPoster.Posting" />
+        <Using Include="SocialPoster.Posting.Services" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="SocialPoster.Tests" />
+    </ItemGroup>
 
 </Project>

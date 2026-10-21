@@ -1,0 +1,26 @@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.h6">@Review.Incoming.DisplayName</MudText>
+        <MudText Class="mb-3">@Review.Reason</MudText>
+        <MudText Class="mb-3">Sync is paused. The incoming account has not been saved. Choose a saved contact to review its complete identities and confirm a merge, keep this account separate, skip it, or cancel the remaining sync.</MudText>
+        @foreach (var preview in Review.Candidates)
+        {
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Class="mb-2"
+                       OnClick="() => Dialog.Close(DialogResult.Ok(new ContactImportDecision(ImportReviewAction.Merge, preview.Left.Id)))">
+                Review @preview.Left.DisplayName (@preview.Left.Key)
+            </MudButton>
+        }
+        <MudAlert Severity="Severity.Info">Keeping separate cannot duplicate an identity already owned by a saved contact. Any changes made during review require a fresh sync preview.</MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel sync</MudButton>
+        <MudButton OnClick="() => Choose(ImportReviewAction.Skip)">Skip account</MudButton>
+        <MudButton OnClick="() => Choose(ImportReviewAction.KeepSeparate)">Keep separate</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public ContactImportReview Review { get; set; } = default!;
+    private void Choose(ImportReviewAction action) => Dialog.Close(DialogResult.Ok(new ContactImportDecision(action)));
+}

@@ -1,0 +1,51 @@
+.scheduling-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: .85rem;
+}
+
+.scheduling-field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.scheduling-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.7rem;
+    padding: .55rem .7rem;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: .6rem;
+    color: var(--mud-palette-text-primary);
+    background: var(--mud-palette-surface);
+    font: inherit;
+}
+
+.scheduling-input:focus {
+    outline: 2px solid color-mix(in srgb, var(--mud-palette-primary) 55%, transparent);
+    outline-offset: 1px;
+}
+
+.scheduled-post {
+    border-radius: 12px;
+}
+
+.scheduled-platforms {
+    display: grid;
+    gap: .4rem;
+}
+
+.scheduled-platform {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.scheduled-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

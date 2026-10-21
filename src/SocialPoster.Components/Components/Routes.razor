@@ -1,0 +1,23 @@
+<Router AppAssembly="@AppAssembly" AdditionalAssemblies="@AdditionalAssemblies">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(MainLayout)"><SocialPoster.Components.Pages.NotFound /></LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    /// <summary>
+    /// Name of the assembly containing routes. A string keeps this parameter serializable
+    /// across the interactive server render-mode boundary.
+    /// </summary>
+    [Parameter] public string AppAssemblyName { get; set; } = typeof(Routes).Assembly.GetName().Name!;
+
+    /// <summary>Names of additional route assemblies supplied by the host.</summary>
+    [Parameter] public string[]? AdditionalAssemblyNames { get; set; }
+
+    private Assembly AppAssembly => Assembly.Load(AppAssemblyName);
+    private IEnumerable<Assembly>? AdditionalAssemblies => AdditionalAssemblyNames?.Select(Assembly.Load);
+}

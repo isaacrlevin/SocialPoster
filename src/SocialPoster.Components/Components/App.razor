@@ -1,0 +1,37 @@
+@inject NavigationManager Navigation
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="@Navigation.BaseUri" />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="@Assets["_content/SocialPoster.Components/app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/SocialPoster.Components/SocialPoster.Components.bundle.scp.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="_content/SocialPoster.Components/favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes AppAssemblyName="@(AppAssembly.GetName().Name!)"
+            AdditionalAssemblyNames="@AdditionalAssemblies?.Select(a => a.GetName().Name!).ToArray()"
+            @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_content/SocialPoster.Components/js/composer.js"]"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    /// <summary>Route assembly for the full-document sample shell.</summary>
+    [Parameter] public Assembly AppAssembly { get; set; } = typeof(Routes).Assembly;
+
+    /// <summary>Other route assemblies to include in the interactive router.</summary>
+    [Parameter] public IEnumerable<Assembly>? AdditionalAssemblies { get; set; }
+}

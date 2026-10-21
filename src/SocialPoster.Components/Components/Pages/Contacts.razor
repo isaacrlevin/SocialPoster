@@ -1,0 +1,1075 @@
+@inject ContactService ContactSvc
+@inject PublishService Publisher
+@inject SecretStore Secrets
+@inject XClient XApi
+@inject LinkedInClient LinkedInApi
+@inject MastodonClient MastodonApi
+@inject AccountFinder Finder
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject ConflictResultsStore ConflictResults
+@inherits PlatformComponent
+@implements IDisposable
+
+<PageTitle>Contacts · SocialPoster</PageTitle>
+
+<PageHeader Title="Contacts" Subtitle="People you've mentioned, and the accounts they have on each platform.">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" OnClick="HandleConflictsAsync" Disabled="@(busy || syncing || scanningConflicts || confirmingConflictScan || merging)">Handle conflicts</MudButton>
+        <MudButton Variant="Variant.Outlined" OnClick="ToggleManualMerge" Disabled="@(busy || syncing || scanningConflicts || merging)">@(manualMerge ? "Cancel manual merge" : "Manual merge")</MudButton>
+        @foreach (var platform in EnabledPlatforms.Platforms)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => PurgeAsync(platform)" Disabled="@(busy || syncing || scanningConflicts)">Purge @PlatformInfo.Label(platform)</MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(syncing || busy || merging)" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => StartEditAndScrollAsync(new Contact())">Add contact</MudButton>
+        @if (EnabledPlatforms.Contains(Platform.Mastodon) && status?.Mastodon == true)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="SyncMastodonFollowsAsync" Disabled="@(!CanStartSync)"
+                       StartIcon="@Icons.Material.Filled.Sync">@(syncingMastodon ? $"Syncing… {syncCount}" : "Sync Mastodon follows")</MudButton>
+        }
+        @if (EnabledPlatforms.Contains(Platform.Bluesky))
+        {
+        <MudTooltip Text="@(string.IsNullOrWhiteSpace(blueskyHandle) ? "Set your Bluesky handle under Accounts first" : $"Import everyone @{blueskyHandle} follows")">
+            <MudButton Variant="Variant.Outlined" OnClick="SyncFollowsAsync"
+                       StartIcon="@(syncing ? null : Icons.Material.Filled.Sync)" Disabled="@(!CanStartSync || string.IsNullOrWhiteSpace(blueskyHandle))">
+                @if (syncing && !syncingX && !syncingMastodon)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Syncing… @syncCount</span>
+                }
+                else
+                {
+                    <span>Sync Bluesky follows</span>
+                }
+            </MudButton>
+        </MudTooltip>
+        }
+        @if (canSyncX)
+        {
+            <MudTooltip Text="Import everyone your authenticated X API account follows. Uses your X API quota.">
+                <MudButton Variant="Variant.Outlined" OnClick="SyncXFollowsAsync" Disabled="@(!CanStartSync)"
+                           StartIcon="@(syncing && syncingX ? null : Icons.Material.Filled.Sync)">
+                    @if (syncing && syncingX)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                        <span>Syncing… @syncCount</span>
+                    }
+                    else
+                    {
+                        <span>Sync X follows</span>
+                    }
+                </MudButton>
+            </MudTooltip>
+        }
+    </Actions>
+</PageHeader>
+
+@if (syncing)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-3" role="status">
+        Follow sync in progress — @syncCount accounts processed. Duplicate review pauses saving the incoming account.
+        <MudButton OnClick="CancelSync">Cancel sync</MudButton>
+    </MudAlert>
+}
+
+@if (scanningConflicts)
+{
+    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" role="status" aria-live="polite">
+        <MudText Typo="Typo.subtitle2">Checking contacts for conflicts</MudText>
+        <MudProgressLinear Indeterminate="@(conflictProgress is null)" Value="@ConflictScanPercent" Color="Color.Primary" Class="my-2" />
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @if (conflictProgress is { } scan)
+            {
+                <span>@scan.Completed.ToString("N0") / @scan.Total.ToString("N0") comparisons checked (@ConflictScanPercent.ToString("F0")%).</span>
+            }
+            else
+            {
+                <span>Loading contacts…</span>
+            }
+            Large contact lists may take some time. Nothing is merged automatically.
+        </MudText>
+    </MudPaper>
+}
+
+@if (message is not null)
+{
+    <MudAlert Severity="@(messageIsError ? Severity.Error : Severity.Success)" Variant="Variant.Outlined" Dense="true" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="() => message = null">@message</MudAlert>
+}
+
+@if (conflicts is { Count: > 0 })
+{
+    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
+        <MudText Typo="Typo.h6">Suggested conflicts</MudText>
+        <MudText Class="mb-3">Suggestions are saved automatically so you can leave and return. They reflect the last requested scan, not a live scan. Suggestions are not proof that these are the same person. Nothing is merged automatically.</MudText>
+        @foreach (var conflict in conflicts)
+        {
+            <div class="d-flex align-center flex-wrap gap-2 mb-2">
+                <MudText>@conflict.Left.DisplayName (@conflict.Left.Key) / @conflict.Right.DisplayName (@conflict.Right.Key) — @conflict.Reason</MudText>
+                <MudButton Variant="Variant.Outlined" OnClick="() => ReviewMergeAsync(conflict)" Disabled="@(syncing || scanningConflicts || merging)">Review merge</MudButton>
+            </div>
+        }
+        <MudButton OnClick="DismissConflictsAsync" Disabled="@(scanningConflicts || merging)">Dismiss suggestions</MudButton>
+    </MudPaper>
+}
+
+@if (manualMerge)
+{
+    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
+        <MudText Typo="Typo.h6">Manual merge</MudText>
+        <MudText>Select two contacts using the checkboxes below. Selections stay selected across pages and filters. No scan is run.</MudText>
+        <div class="d-flex align-center flex-wrap gap-2 mt-2">
+            @foreach (var selected in mergeSelection.Values)
+            {
+                <MudChip T="int" Value="@selected.Id" OnClose="() => SetMergeSelection(selected, false)">@selected.DisplayName (@selected.Key)</MudChip>
+            }
+            <MudText Typo="Typo.body2">@mergeSelection.Count / 2 selected</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ManualMergeAsync"
+                       Disabled="@(mergeSelection.Count != 2 || busy || syncing || scanningConflicts || merging)">Review selected merge</MudButton>
+        </div>
+    </MudPaper>
+}
+
+@if (editing is not null)
+{
+    <MudPaper Class="sp-card mb-6" Elevation="0" Style="border-color: var(--mud-palette-primary)">
+        <div class="sp-card-header">
+            <Avatar Url="@editing.AvatarUrl" Name="@editing.DisplayName" Size="32" />
+            <MudText Typo="Typo.h6">@(editing.Id == 0 ? "New contact" : editing.DisplayName)</MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Class="ms-auto" OnClick="() => editing = null" aria-label="Close" />
+        </div>
+        <div class="sp-card-body">
+            @if (editError is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true" Class="mb-3">@editError</MudAlert>
+            }
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="editing.DisplayName" @bind-Value:after="SuggestKey" Label="Display name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="editing.Key" @bind-Value:after="() => keyTouched = true" Label="Template key" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Adornment="Adornment.Start" AdornmentText="@("{@")"
+                                  HelperText="@(editing.Id != 0 ? "Renaming breaks drafts that use the old key." : "Used in posts as a {@key} token.")" />
+                </MudItem>
+
+                @if (EnabledPlatforms.Contains(Platform.Bluesky))
+                {
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" @bind-Value="editing.BlueskyHandle" Label="🦋 Bluesky handle" Placeholder="name.bsky.social" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Adornment="Adornment.Start" AdornmentText="@("@")" HelperText="@(editing.BlueskyDid ?? "DID is resolved on save")" />
+                </MudItem>
+                }
+                @if (EnabledPlatforms.Contains(Platform.Mastodon))
+                {
+                    <MudItem xs="12" md="6">
+                        <MudTextField T="string" @bind-Value="editing.MastodonAcct" Label="Ⓜ Mastodon acct" Placeholder="user@server" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      HelperText="Fully qualified acct; lookup resolves local handles using your configured instance." />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="LookupMastodonAsync"
+                                   Disabled="@(busy || status?.Mastodon != true || string.IsNullOrWhiteSpace(editing.MastodonAcct))">Look up / verify</MudButton>
+                        @if (MastodonIdentity.ProfileUrl(editing.MastodonAcct) is { } profile)
+                        {
+                            <MudLink Href="@profile" Target="_blank">Open Mastodon profile</MudLink>
+                        }
+                    </MudItem>
+                }
+                @if (EnabledPlatforms.Contains(Platform.Threads))
+                {
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" @bind-Value="editing.ThreadsUsername" Label="@@ Threads username" Placeholder="username" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Adornment="Adornment.Start" AdornmentText="@("@")" />
+                </MudItem>
+                }
+                @if (EnabledPlatforms.Contains(Platform.X))
+                {
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" @bind-Value="editing.XUsername" Label="𝕏 X username" Placeholder="username" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Adornment="Adornment.Start" AdornmentText="@("@")"
+                                  HelperText="@(verifyingXWithCopilot ? (verifyXProgress ?? "Asking Copilot…") : editing.XUserId is not null ? $"Verified via X API ✓ (id {editing.XUserId})" : editing.XVerifiedByCopilotAtUtc is not null ? "✨ Verified by Copilot ✓" : "Not verified")" />
+                    <div class="d-flex gap-2 mt-1">
+                        @if (status?.X == true)
+                        {
+                            <MudTooltip Text="Uses 1 X API request">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="VerifyXAsync" Disabled="@(busy || string.IsNullOrWhiteSpace(editing.XUsername))">Verify</MudButton>
+                            </MudTooltip>
+                        }
+                        @if (finderSettings?.Enabled == true)
+                        {
+                            <MudTooltip Text="Uses Copilot to check the account exists; no X API needed">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="VerifyXWithCopilotAsync" Disabled="@(busy || string.IsNullOrWhiteSpace(editing.XUsername))">Verify</MudButton>
+                            </MudTooltip>
+                        }
+                    </div>
+                </MudItem>
+                }
+                @if (EnabledPlatforms.Contains(Platform.LinkedIn))
+                {
+                <MudItem xs="12" md="4">
+                    <MudTextField T="string" @bind-Value="editing.LinkedInName" Label="in LinkedIn name" Placeholder="Exact name on LinkedIn" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  HelperText="Must exactly match their LinkedIn name for the tag to work." />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" @bind-Value="editing.LinkedInUrn" Label="in LinkedIn URN" Placeholder="urn:li:organization:1035 or urn:li:person:…" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  HelperText="For companies, use Look up or the number in the page admin URL (linkedin.com/company/1035/admin). LinkedIn's API doesn't let apps look up URNs for other people." />
+                    @if (finderSettings?.Enabled == true)
+                    {
+                        <MudTooltip Text="@(LinkedInVerifyIdentifier is null ? "Find a profile with the finder below, paste a profile URL, or type a company name to the right first" : "Uses Copilot to check the profile is real")">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AutoAwesome" Class="mt-1" OnClick="VerifyLinkedInWithCopilotAsync" Disabled="@(busy || LinkedInVerifyIdentifier is null)">Verify profile with Copilot</MudButton>
+                        </MudTooltip>
+                        @if (verifyingLinkedInWithCopilot)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@(verifyLinkedInProgress ?? "Asking Copilot…")</MudText>
+                        }
+                        else if (editing.LinkedInVerifiedByCopilotAtUtc is not null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Success" Class="d-block mt-1">✨ Verified by Copilot ✓</MudText>
+                        }
+                    }
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <div class="d-flex gap-2 align-start">
+                        <MudTextField T="string" @bind-Value="companyVanity" Label="Look up LinkedIn company page" Placeholder="microsoft" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Adornment="Adornment.Start" AdornmentText="linkedin.com/company/" />
+                        <MudTooltip Text="@(status?.LinkedIn == true ? "Requires Community Management API access" : "Connect LinkedIn under Accounts first")">
+                            <MudButton Variant="Variant.Outlined" Class="mt-1" OnClick="LookupCompanyAsync" Disabled="@(busy || status?.LinkedIn != true || string.IsNullOrWhiteSpace(companyVanity))">Look up</MudButton>
+                        </MudTooltip>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(editing.LinkedInProfileUrl))
+                    {
+                        <MudText Typo="Typo.caption" Class="text-break">Profile: <MudLink Href="@editing.LinkedInProfileUrl" Target="_blank">@editing.LinkedInProfileUrl</MudLink></MudText>
+                    }
+                </MudItem>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(editing.Bio))
+                {
+                    <MudItem xs="12">
+                        <div class="sp-section-label mb-1">Bio</div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="bio">@editing.Bio</MudText>
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <AccountFinderPanel Contact="editing" Platforms="@EnabledPlatforms.Platforms" OnUse="UseCandidate" />
+                </MudItem>
+            </MudGrid>
+        </div>
+        <div class="sp-card-footer">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@busy">Save</MudButton>
+            <MudButton Variant="Variant.Outlined" OnClick="() => editing = null">Cancel</MudButton>
+            @if (EnabledPlatforms.Contains(Platform.Bluesky) && EnabledPlatforms.Searchable.Count > 0 && editing.BlueskyDid is not null)
+            {
+                <MudButton Variant="Variant.Text" Class="ms-auto" OnClick="RefreshHintsAsync" Disabled="@busy">Find links in their Bluesky bio</MudButton>
+            }
+        </div>
+    </MudPaper>
+}
+
+<MudPaper Class="sp-card mb-3 pa-3" Elevation="0">
+    <div class="d-flex align-center flex-wrap gap-3">
+        <MudTextField T="string" @bind-Value="filter" @bind-Value:after="ReloadFromFirstPageAsync" Immediate="true" DebounceInterval="250"
+                      Placeholder="Search name, key or handle…" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Style="max-width:320px" Class="flex-grow-1" />
+        @if (EnabledPlatforms.Platforms.Count > 0)
+        {
+            <MudSelect T="Platform" Label="Show platforms" MultiSelection="true"
+                       SelectedValues="@shownPlatforms" SelectedValuesChanged="SetShownPlatformsAsync"
+                       ToStringFunc="@(p => PlatformInfo.Label(p))"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px"
+                       HelperText="Show contacts linked to any checked platform; all checked shows everyone.">
+                @foreach (var platform in EnabledPlatforms.Platforms)
+                {
+                    <MudSelectItem T="Platform" Value="@platform">@PlatformInfo.Label(platform)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        <MudSelect T="ContactSort" @bind-Value="sort" @bind-Value:after="ReloadFromFirstPageAsync" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px">
+            <MudSelectItem Value="ContactSort.NameAsc">Name (A–Z)</MudSelectItem>
+            <MudSelectItem Value="ContactSort.NameDesc">Name (Z–A)</MudSelectItem>
+            <MudSelectItem Value="ContactSort.MostUsed">Most used</MudSelectItem>
+            <MudSelectItem Value="ContactSort.RecentlyUsed">Recently used</MudSelectItem>
+            <MudSelectItem Value="ContactSort.RecentlyAdded">Recently added</MudSelectItem>
+        </MudSelect>
+    </div>
+</MudPaper>
+
+@if (contactPage is null)
+{
+    <MudProgressLinear Indeterminate="true" Rounded="true" />
+}
+else if (contactPage.TotalCount == 0 && !IsFiltering)
+{
+    <MudPaper Class="sp-card pa-10 d-flex flex-column align-center text-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.People" Style="font-size:3rem" Color="Color.Primary" />
+        <MudText Typo="Typo.h6" Class="mt-2">No contacts yet</MudText>
+        <MudText Color="Color.Secondary">Type <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@("@")</MudChip> in the composer to find people@(EnabledPlatforms.Contains(Platform.Bluesky) ? ", or sync your Bluesky follows." : ".")</MudText>
+    </MudPaper>
+}
+else if (contactPage.TotalCount == 0)
+{
+    <MudPaper Class="sp-card pa-8 text-center" Elevation="0">
+        <MudText Color="Color.Secondary">No contacts match your filters.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Class="sp-card" Elevation="0" Style="overflow:hidden">
+        <MudSimpleTable Hover="true" Elevation="0" Class="sp-table" Style="overflow-x:auto">
+            <thead>
+                <tr>
+                    @if (manualMerge)
+                    {
+                        <th>Select</th>
+                    }
+                    <th></th>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Accounts</th>
+                    <th style="text-align:right">Used</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in contactPage.Items)
+                {
+                    <tr>
+                        @if (manualMerge)
+                        {
+                            <td>
+                                <MudCheckBox T="bool" Value="@mergeSelection.ContainsKey(c.Id)"
+                                             ValueChanged="selected => SetMergeSelection(c, selected)"
+                                             Disabled="@(merging || (!mergeSelection.ContainsKey(c.Id) && mergeSelection.Count == 2))"
+                                             aria-label="@($"Select {c.DisplayName} for merge")" />
+                            </td>
+                        }
+                        <td style="width:56px"><Avatar Url="@c.AvatarUrl" Name="@c.DisplayName" Size="36" Lazy="true" /></td>
+                        <td class="fw-semibold">@c.DisplayName</td>
+                        <td><code class="key">{@@@c.Key}</code></td>
+                        <td>
+                            <div class="d-flex align-center gap-2">
+                                <PlatformBadges Contact="c" Platforms="@EnabledPlatforms.Platforms" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@ContactService.Describe(c, EnabledPlatforms.Platforms)</MudText>
+                            </div>
+                        </td>
+                        <td style="text-align:right"><MudText Typo="Typo.body2" Color="Color.Secondary">@c.UseCount</MudText></td>
+                        <td style="text-align:right; white-space:nowrap">
+                            <MudTooltip Text="Edit"><MudIconButton Disabled="@(syncing || busy || merging)" Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => StartEditAndScrollAsync(c)" aria-label="@($"Edit {c.DisplayName}")" /></MudTooltip>
+                            <MudTooltip Text="Delete"><MudIconButton Disabled="@(syncing || busy || merging)" Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(c)" aria-label="@($"Delete {c.DisplayName}")" /></MudTooltip>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mt-3">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@contactPage.TotalCount contact@(contactPage.TotalCount == 1 ? "" : "s")</MudText>
+        @if (contactPage.TotalPages > 1)
+        {
+            <MudPagination Count="contactPage.TotalPages" Selected="contactPage.Page" SelectedChanged="GoToPageAsync" Size="Size.Small" Color="Color.Primary" />
+        }
+    </div>
+}
+
+<MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
+    You don't normally need to add contacts by hand: pick someone with @("@") in the composer and they're saved here.
+    Edit a contact to link their accounts on other platforms.
+</MudText>
+
+@code {
+    [SupplyParameterFromQuery(Name = "edit")] public int? EditId { get; set; }
+    [SupplyParameterFromQuery(Name = "new")] public string? NewName { get; set; }
+
+    private ContactPage? contactPage;
+    private IReadOnlyList<ContactConflict>? conflicts;
+    private bool manualMerge;
+    private bool merging;
+    private readonly Dictionary<int, Contact> mergeSelection = [];
+
+    private void ToggleManualMerge()
+    {
+        manualMerge = !manualMerge;
+        mergeSelection.Clear();
+    }
+
+    private void SetMergeSelection(Contact contact, bool selected)
+    {
+        if (merging) return;
+        if (!selected) mergeSelection.Remove(contact.Id);
+        else if (mergeSelection.Count < 2) mergeSelection[contact.Id] = contact;
+    }
+
+    private async Task ManualMergeAsync()
+    {
+        if (mergeSelection.Count != 2) return;
+        var ids = mergeSelection.Keys.ToArray();
+        await ReviewMergeAsync(ids[0], ids[1]);
+    }
+    private string? filter;
+    private HashSet<Platform> shownPlatforms = [];
+    private HashSet<Platform>? previousPlatforms;
+    private ContactSort sort = ContactSort.NameAsc;
+    private int pageNumber = 1;
+    private const int PageSize = 25;
+    private Contact? editing;
+    private string? editError;
+    private string? companyVanity;
+    private bool keyTouched;
+    private bool busy;
+    private bool verifyingXWithCopilot;
+    private string? verifyXProgress;
+    private bool verifyingLinkedInWithCopilot;
+    private string? verifyLinkedInProgress;
+    private bool syncing;
+    private bool syncingX;
+    private bool canSyncX;
+    private int syncCount;
+    private string? blueskyHandle;
+    private PlatformStatus? status;
+    private AccountFinderSettings? finderSettings;
+    private string? message;
+    private bool messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpdateShownPlatforms();
+        finderSettings = await Finder.GetSettingsAsync();
+        await LoadAsync();
+        try { conflicts = await ConflictResults.LoadAsync(); }
+        catch (Exception ex) { Flash($"Couldn't restore saved conflict results: {ex.Message}", true); }
+
+        if (EditId is { } id && await ContactSvc.GetAsync(id) is { } toEdit)
+        {
+            StartEdit(toEdit);
+        }
+        else if (!string.IsNullOrWhiteSpace(NewName))
+        {
+            StartEdit(new Contact { DisplayName = NewName, Key = Slugs.Create(NewName) });
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        status = await Publisher.GetStatusAsync(EnabledPlatforms.Platforms);
+        canSyncX = await XApi.CanImportFollowsAsync(EnabledPlatforms.Platforms);
+        blueskyHandle = EnabledPlatforms.Contains(Platform.Bluesky) ? await Secrets.GetAsync(SettingKeys.BlueskyHandle) : null;
+        UpdateShownPlatforms();
+        await LoadAsync();
+    }
+
+    private void UpdateShownPlatforms()
+    {
+        var enabled = EnabledPlatforms.Platforms.ToHashSet();
+        if (previousPlatforms is null || shownPlatforms.SetEquals(previousPlatforms))
+            shownPlatforms = enabled.ToHashSet();
+        else
+        {
+            shownPlatforms.IntersectWith(enabled);
+            shownPlatforms.UnionWith(enabled.Except(previousPlatforms));
+        }
+        previousPlatforms = enabled;
+    }
+
+    private async Task SetShownPlatformsAsync(IEnumerable<Platform> platforms)
+    {
+        shownPlatforms = platforms.Where(EnabledPlatforms.Contains).ToHashSet();
+        await ReloadFromFirstPageAsync();
+    }
+
+    private bool IsFiltering => !string.IsNullOrWhiteSpace(filter) || !shownPlatforms.SetEquals(EnabledPlatforms.Platforms);
+
+    private Task ReloadFromFirstPageAsync()
+    {
+        pageNumber = 1;
+        return LoadAsync();
+    }
+
+    private Task LoadAsync() => LoadPageAsync();
+
+    private async Task LoadPageAsync()
+    {
+        var query = new ContactQuery(Filter: filter, Sort: sort, Page: pageNumber, PageSize: PageSize,
+            Platforms: EnabledPlatforms.Platforms,
+            LinkedPlatforms: shownPlatforms.SetEquals(EnabledPlatforms.Platforms) ? null : shownPlatforms.ToArray());
+        contactPage = await ContactSvc.ListAsync(query);
+        pageNumber = contactPage.Page;
+    }
+
+    private Task GoToPageAsync(int p)
+    {
+        pageNumber = p;
+        return LoadPageAsync();
+    }
+
+    private async Task StartEditAndScrollAsync(Contact c)
+    {
+        if (syncing || busy || merging) return;
+        StartEdit(c);
+        await JS.InvokeVoidAsync("socialPoster.scrollToTop");
+    }
+
+    private void StartEdit(Contact c)
+    {
+        editing = Clone(c);
+        editError = null;
+        keyTouched = c.Id != 0 || !string.IsNullOrEmpty(c.Key);
+        companyVanity = c.LinkedInProfileUrl is { } url && url.Contains("/company/")
+            ? url.TrimEnd('/').Split('/').Last()
+            : null;
+    }
+
+    private void SuggestKey()
+    {
+        if (editing is not null && !keyTouched)
+        {
+            editing.Key = Slugs.Create(editing.DisplayName);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (editing is null) return;
+        busy = true;
+        try
+        {
+            editError = await ContactSvc.SaveAsync(editing, platforms: EnabledPlatforms.Platforms);
+            if (editError is null)
+            {
+                var hasAccounts = new[] { editing.XUsername, editing.XUserId, editing.BlueskyHandle, editing.BlueskyDid,
+                    editing.LinkedInProfileUrl, editing.LinkedInUrn, editing.LinkedInName,
+                    editing.MastodonAcct, editing.MastodonUri, editing.MastodonProfileUrl }.Any(value => !string.IsNullOrWhiteSpace(value));
+                Flash(hasAccounts ? $"Saved {editing.DisplayName}." : $"Removed {editing.DisplayName}: no accounts remain.");
+                if (!hasAccounts)
+                {
+                    mergeSelection.Remove(editing.Id);
+                    conflicts = conflicts?.Where(c => c.Left.Id != editing.Id && c.Right.Id != editing.Id).ToList();
+                    await PersistConflictsAsync();
+                }
+                editing = null;
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task PurgeAsync(Platform platform)
+    {
+        if (!EnabledPlatforms.Contains(platform) || busy || syncing || scanningConflicts) return;
+        busy = true;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<PurgeContactsDialog>($"Purge {PlatformInfo.Label(platform)} identities",
+                new DialogParameters { [nameof(PurgeContactsDialog.TargetPlatform)] = platform },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await dialog.Result is { Canceled: false })
+            {
+                editing = null;
+                conflicts = null;
+                mergeSelection.Clear();
+                Flash($"Purged all {PlatformInfo.Label(platform)} identities. Contacts without remaining accounts were deleted; other accounts were preserved.");
+                await PersistConflictsAsync();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { Flash(ex.Message, true); }
+        finally { busy = false; }
+    }
+
+    private async Task HandleConflictsAsync()
+    {
+        if (busy || syncing || scanningConflicts || confirmingConflictScan || merging) return;
+        confirmingConflictScan = true;
+        try
+        {
+            if (await Dialogs.ShowMessageBoxAsync("Check contacts for conflicts",
+                "This compares your contacts to find possible duplicates. With lots of contacts, it may take some time. You will see progress while it runs. Nothing is merged automatically.",
+                yesText: "Start scan", cancelText: "Cancel") != true) return;
+            message = null;
+            messageIsError = false;
+            await ScanConflictsAsync();
+            if (conflicts?.Count == 0 && !messageIsError) Flash("No suggested conflicts found.");
+        }
+        catch (Exception ex) { Flash(ex.Message, true); }
+        finally { confirmingConflictScan = false; }
+    }
+
+    private bool scanningConflicts;
+    private bool confirmingConflictScan;
+    private (long Completed, long Total)? conflictProgress;
+    private double ConflictScanPercent => conflictProgress is { } scan
+        ? scan.Total == 0 ? 100 : 100.0 * scan.Completed / scan.Total
+        : 0;
+
+    private async Task ScanConflictsAsync()
+    {
+        scanningConflicts = true;
+        conflictProgress = null;
+        StateHasChanged();
+        var progress = new Progress<(long Completed, long Total)>(value =>
+        {
+            if (!scanningConflicts) return;
+            conflictProgress = value;
+            StateHasChanged();
+        });
+        try
+        {
+            conflicts = await ContactSvc.FindConflictsAsync(progress: progress);
+            await PersistConflictsAsync();
+        }
+        finally
+        {
+            scanningConflicts = false;
+            conflictProgress = null;
+        }
+    }
+
+    private Task ReviewMergeAsync(ContactConflict conflict) => ReviewMergeAsync(conflict.Left.Id, conflict.Right.Id);
+
+    private async Task ReviewMergeAsync(int leftId, int rightId)
+    {
+        if (busy || syncing || scanningConflicts || merging) return;
+        merging = true;
+        try
+        {
+            var preview = await ContactSvc.PreviewMergeAsync(leftId, rightId);
+            var dialog = await Dialogs.ShowAsync<MergeContactsDialog>("Review contact merge",
+                new DialogParameters { [nameof(MergeContactsDialog.Preview)] = preview },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            if (await dialog.Result is { Canceled: false })
+            {
+                editing = null;
+                RemoveMergedSelections(leftId, rightId);
+                Flash("Contacts merged. Old template keys remain valid as aliases.");
+                await PersistConflictsAsync();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { Flash(ex.Message, true); }
+        finally { merging = false; }
+    }
+
+    private void RemoveMergedSelections(int leftId, int rightId)
+    {
+        conflicts = conflicts?.Where(c => c.Left.Id != leftId && c.Right.Id != leftId &&
+            c.Left.Id != rightId && c.Right.Id != rightId).ToList();
+        mergeSelection.Clear();
+    }
+
+    private async Task PersistConflictsAsync()
+    {
+        try { await ConflictResults.SaveAsync(conflicts); }
+        catch (Exception ex) { Flash($"Couldn't save conflict results. They may not be retained when you leave: {ex.Message}", true); }
+    }
+
+    private async Task DismissConflictsAsync()
+    {
+        try
+        {
+            await ConflictResults.SaveAsync(null);
+            conflicts = null;
+        }
+        catch (Exception ex) { Flash($"Couldn't dismiss saved conflict results: {ex.Message}", true); }
+    }
+
+    private async Task VerifyXAsync()
+    {
+        if (editing?.XUsername is null) return;
+        busy = true;
+        editError = null;
+        try
+        {
+            var user = await XApi.LookupUsernameAsync(editing.XUsername);
+            if (user is null)
+            {
+                editError = $"@{editing.XUsername} wasn't found on X.";
+            }
+            else
+            {
+                editing.XUsername = user.Username;
+                editing.XUserId = user.Id;
+                editing.AvatarUrl ??= user.ProfileImageUrl;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            editError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task VerifyXWithCopilotAsync()
+    {
+        if (editing?.XUsername is null) return;
+        busy = true;
+        verifyingXWithCopilot = true;
+        verifyXProgress = null;
+        editError = null;
+        try
+        {
+            var progress = new Progress<string>(p => { verifyXProgress = p; _ = InvokeAsync(StateHasChanged); });
+            var result = await Finder.VerifyAsync(Platform.X, editing.XUsername, progress);
+            var suffix = result.Name is null ? "" : $" ({result.Name})";
+            if (!result.Exists)
+            {
+                editError = $"Copilot couldn't confirm @{editing.XUsername} exists on X.{(result.Reason is null ? "" : $" {result.Reason}")}";
+            }
+            else
+            {
+                editing.XVerifiedByCopilotAtUtc = DateTime.UtcNow;
+                Flash($"✨ Copilot confirmed @{editing.XUsername} exists on X{suffix}.{(result.Reason is null ? "" : $" {result.Reason}")}");
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            editError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            verifyingXWithCopilot = false;
+            verifyXProgress = null;
+        }
+    }
+
+    /// <summary>What to hand the Copilot agent when verifying a LinkedIn profile: the profile URL if known, else a company page built from the vanity name typed in the lookup box or a saved organization URN.</summary>
+    private string? LinkedInVerifyIdentifier =>
+        !string.IsNullOrWhiteSpace(editing?.LinkedInProfileUrl) ? editing.LinkedInProfileUrl
+        : !string.IsNullOrWhiteSpace(companyVanity) ? $"https://www.linkedin.com/company/{companyVanity.Trim()}"
+        : OrganizationUrlFromUrn(editing?.LinkedInUrn) is { } orgUrl ? orgUrl
+        : null;
+
+    /// <summary>LinkedIn accepts the numeric organization id in place of the vanity name, e.g. linkedin.com/company/1035.</summary>
+    private static string? OrganizationUrlFromUrn(string? urn) =>
+        urn is { Length: > 0 } u && u.StartsWith("urn:li:organization:", StringComparison.Ordinal)
+            ? $"https://www.linkedin.com/company/{u["urn:li:organization:".Length..]}"
+            : null;
+
+    private async Task VerifyLinkedInWithCopilotAsync()
+    {
+        if (editing is null || LinkedInVerifyIdentifier is not { } identifier) return;
+        busy = true;
+        verifyingLinkedInWithCopilot = true;
+        verifyLinkedInProgress = null;
+        editError = null;
+        try
+        {
+            var progress = new Progress<string>(p => { verifyLinkedInProgress = p; _ = InvokeAsync(StateHasChanged); });
+            var result = await Finder.VerifyAsync(Platform.LinkedIn, identifier, progress);
+            if (!result.Exists)
+            {
+                editError = $"Copilot couldn't confirm that LinkedIn profile is real.{(result.Reason is null ? "" : $" {result.Reason}")}";
+            }
+            else
+            {
+                editing.LinkedInProfileUrl ??= identifier;
+                editing.LinkedInVerifiedByCopilotAtUtc = DateTime.UtcNow;
+                if (result.Name is not null && string.IsNullOrWhiteSpace(editing.LinkedInName)) editing.LinkedInName = result.Name;
+                Flash($"✨ Copilot confirmed that LinkedIn profile is real{(result.Name is null ? "" : $" ({result.Name})")}.{(result.Reason is null ? "" : $" {result.Reason}")}");
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            editError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+            verifyingLinkedInWithCopilot = false;
+            verifyLinkedInProgress = null;
+        }
+    }
+
+    private async Task LookupCompanyAsync()
+    {
+        if (editing is null || string.IsNullOrWhiteSpace(companyVanity)) return;
+        busy = true;
+        editError = null;
+        try
+        {
+            var org = await LinkedInApi.LookupOrganizationAsync(companyVanity);
+            if (org is null)
+            {
+                editError = $"No LinkedIn company page named '{companyVanity}'.";
+            }
+            else
+            {
+                editing.LinkedInUrn = org.Urn;
+                editing.LinkedInName = org.Name;
+                editing.LinkedInProfileUrl = $"https://www.linkedin.com/company/{org.VanityName}";
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            editError = "LinkedIn refused the lookup (403). Company lookups need Community Management API access. You can still paste the URN (urn:li:organization:<id>) yourself.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            editError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void UseCandidate(AccountCandidate c)
+    {
+        if (editing is null) return;
+        ContactService.ApplyCandidate(editing, c);
+        if (c.Platform == Platform.LinkedIn)
+        {
+            companyVanity = c.Kind == AccountKind.Organization ? c.Handle : companyVanity;
+        }
+
+        editError = null;
+        Flash(c.Platform == Platform.X
+            ? $"Using @{c.Handle} on X. Click Save to keep it."
+            : c.LinkedInUrn is not null
+                ? $"Using the {c.Name ?? c.Handle} LinkedIn page ({c.LinkedInUrn}); it can be tagged. Click Save to keep it."
+                : "Using that LinkedIn profile. LinkedIn doesn't let apps tag people, so after posting you'll get a checklist to tag them by hand. Click Save to keep it.");
+    }
+
+    private async Task RefreshHintsAsync()
+    {
+        if (editing is null) return;
+        busy = true;
+        try
+        {
+            var notes = await ContactSvc.RefreshHintsAsync(editing, platforms: EnabledPlatforms.Platforms);
+            editError = null;
+            Flash(string.Join(" ", notes) + " Click Save to keep changes.");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(Contact c)
+    {
+        if (syncing || busy || merging) return;
+        busy = true;
+        try
+        {
+            if (await Dialogs.ShowMessageBoxAsync("Delete contact", $"Delete {c.DisplayName}? Drafts using {{@{c.Key}}} will show it as unknown.", yesText: "Delete", cancelText: "Cancel") != true)
+            {
+                return;
+            }
+
+            if (syncing || disposed) return;
+            await ContactSvc.DeleteAsync(c.Id);
+            mergeSelection.Remove(c.Id);
+            conflicts = conflicts?.Where(pair => pair.Left.Id != c.Id && pair.Right.Id != c.Id).ToList();
+            await PersistConflictsAsync();
+            if (editing?.Id == c.Id) editing = null;
+            await LoadAsync();
+        }
+        finally { busy = false; }
+    }
+
+    private async Task SyncFollowsAsync()
+    {
+        if (!EnabledPlatforms.Contains(Platform.Bluesky) || string.IsNullOrWhiteSpace(blueskyHandle)) return;
+        await ImportFollowsAsync(Platform.Bluesky);
+    }
+
+    private bool syncingMastodon;
+    private async Task LookupMastodonAsync()
+    {
+        if (editing is null || !EnabledPlatforms.Contains(Platform.Mastodon)) return;
+        busy = true;
+        try
+        {
+            var account = await MastodonApi.LookupAsync(editing.MastodonAcct ?? "");
+            editing.MastodonAcct = account.Acct;
+            editing.MastodonUri = account.Uri;
+            editing.MastodonProfileUrl = account.Url;
+            Flash($"Verified @{account.Acct}. Click Save to keep it.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        { editError = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task SyncMastodonFollowsAsync()
+    {
+        if (!EnabledPlatforms.Contains(Platform.Mastodon)) return;
+        await ImportFollowsAsync(Platform.Mastodon);
+    }
+
+    private async Task SyncXFollowsAsync()
+    {
+        if (!canSyncX) return;
+        await ImportFollowsAsync(Platform.X);
+    }
+
+    private bool disposed;
+    private CancellationTokenSource? syncCancellation;
+    private IDialogReference? syncDialog;
+    private bool CanStartSync => !disposed && !syncing && !busy && !scanningConflicts &&
+        !confirmingConflictScan && !merging && editing is null;
+
+    private async Task<IDialogReference> OpenSyncDialogAsync<T>(string title, DialogParameters parameters, CancellationToken ct)
+        where T : IComponent
+    {
+        ct.ThrowIfCancellationRequested();
+        return await AwaitSyncDialogOpenAsync(Dialogs.ShowAsync<T>(title, parameters, SyncDialogOptions), ct);
+    }
+
+    private static async Task<IDialogReference> AwaitSyncDialogOpenAsync(Task<IDialogReference> opening, CancellationToken ct)
+    {
+        try { return await opening.WaitAsync(ct); }
+        catch (OperationCanceledException)
+        {
+            // Navigation can dispose the provider before ShowAsync finishes rendering. Release the
+            // sync immediately, and close a late dialog rather than leaving it over the next page.
+            _ = opening.ContinueWith(completed =>
+            {
+                if (completed.IsCompletedSuccessfully) completed.Result.Close();
+                else _ = completed.Exception; // Observe late rendering failures.
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            throw;
+        }
+    }
+
+    private async Task<DialogResult?> WaitForSyncDialogAsync(IDialogReference dialog, CancellationToken ct)
+    {
+        syncDialog = dialog;
+        try { return await dialog.Result.WaitAsync(ct); }
+        finally
+        {
+            dialog.Close();
+            if (ReferenceEquals(syncDialog, dialog)) syncDialog = null;
+        }
+    }
+
+    private async Task<ContactImportDecision> ReviewImportAsync(ContactImportReview review, CancellationToken ct)
+    {
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var selection = await OpenSyncDialogAsync<ImportDuplicatesDialog>("Handle Duplicates",
+                new DialogParameters { [nameof(ImportDuplicatesDialog.Review)] = review }, ct);
+            var result = await WaitForSyncDialogAsync(selection, ct);
+            if (result is null || result.Canceled) return new(ImportReviewAction.Cancel);
+            var decision = (ContactImportDecision)result.Data!;
+            if (decision.Action != ImportReviewAction.Merge) return decision;
+            var preview = review.Candidates.Single(p => p.Left.Id == decision.ContactId);
+            var merge = await OpenSyncDialogAsync<MergeContactsDialog>("Handle Duplicates — review merge",
+                new DialogParameters
+                {
+                    [nameof(MergeContactsDialog.Preview)] = preview,
+                    [nameof(MergeContactsDialog.ImportMode)] = true
+                }, ct);
+            var confirmed = await WaitForSyncDialogAsync(merge, ct);
+            if (confirmed is { Canceled: false }) return (ContactImportDecision)confirmed.Data!;
+            // Cancelling a pair returns to the account choices; cancelling that dialog stops sync.
+        }
+    }
+
+    private static DialogOptions SyncDialogOptions => new()
+        { FullWidth = true, MaxWidth = MaxWidth.Medium, BackdropClick = false };
+
+    private void CancelSync()
+    {
+        syncCancellation?.Cancel();
+        syncDialog?.Close();
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        CancelSync();
+    }
+
+    private sealed class SyncProgress(Action<int> report) : IProgress<int>
+    {
+        public void Report(int value) => report(value);
+    }
+
+    private async Task ImportFollowsAsync(Platform platform)
+    {
+        if (!CanStartSync) return;
+        syncing = true;
+        syncingX = platform == Platform.X;
+        syncingMastodon = platform == Platform.Mastodon;
+        syncCount = 0;
+        message = null;
+        using var cancellation = new CancellationTokenSource();
+        syncCancellation = cancellation;
+        var ct = cancellation.Token;
+        var platforms = EnabledPlatforms.Platforms.ToArray();
+        try
+        {
+            var prompt = await OpenSyncDialogAsync<HandleDuplicatesDialog>("Handle Duplicates", new DialogParameters(), ct);
+            var answer = await WaitForSyncDialogAsync(prompt, ct);
+            if (answer is null || answer.Canceled) return;
+            ContactImportReviewer? reviewer = answer.Data is true ? ReviewImportAsync : null;
+            var progress = new SyncProgress(n =>
+            {
+                syncCount = n;
+                if (!disposed) _ = InvokeAsync(StateHasChanged);
+            });
+            var result = platform switch
+            {
+                Platform.X => await ContactSvc.SyncXFollowsAsync(progress, ct, platforms, reviewer),
+                Platform.Mastodon => await ContactSvc.SyncMastodonFollowsAsync(progress, ct, platforms, reviewer),
+                _ => await ContactSvc.SyncBlueskyFollowsAsync(blueskyHandle!, progress, ct, platforms, reviewer)
+            };
+            if (!disposed) Flash($"Synced {PlatformInfo.Label(platform)} follows: {result}");
+        }
+        catch (OperationCanceledException)
+        {
+            if (!disposed) Flash($"Sync cancelled after {syncCount} accounts processed. Completed imports remain saved; the account awaiting review was not saved. Retrying is safe.", true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException
+            or Microsoft.EntityFrameworkCore.DbUpdateException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            if (!disposed) Flash($"Sync stopped after {syncCount} accounts processed. Completed imports remain saved; retrying is safe. {ex.Message}", true);
+        }
+        finally
+        {
+            syncCancellation = null;
+            syncing = syncingX = syncingMastodon = false;
+            if (!disposed) await LoadAsync();
+        }
+    }
+
+    private void Flash(string text, bool isError = false)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+
+    private static Contact Clone(Contact c) => new()
+    {
+        Id = c.Id,
+        Key = c.Key,
+        DisplayName = c.DisplayName,
+        AvatarUrl = c.AvatarUrl,
+        Bio = c.Bio,
+        BlueskyHandle = c.BlueskyHandle,
+        BlueskyDid = c.BlueskyDid,
+        MastodonAcct = c.MastodonAcct,
+        MastodonUri = c.MastodonUri,
+        MastodonProfileUrl = c.MastodonProfileUrl,
+        XUsername = c.XUsername,
+        XUserId = c.XUserId,
+        XVerifiedByCopilotAtUtc = c.XVerifiedByCopilotAtUtc,
+        LinkedInUrn = c.LinkedInUrn,
+        LinkedInName = c.LinkedInName,
+        LinkedInProfileUrl = c.LinkedInProfileUrl,
+        LinkedInVerifiedByCopilotAtUtc = c.LinkedInVerifiedByCopilotAtUtc,
+        Source = c.Source,
+        CreatedAtUtc = c.CreatedAtUtc,
+        LastUsedAtUtc = c.LastUsedAtUtc,
+        UseCount = c.UseCount,
+        DiscoveryRevision = c.DiscoveryRevision,
+    };
+}

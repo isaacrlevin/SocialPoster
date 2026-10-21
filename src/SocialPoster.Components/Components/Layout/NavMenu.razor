@@ -1,0 +1,13 @@
+@inject SocialPosterNavigation SocialPosterNavigation
+
+<MudDrawerHeader Class="sp-brand">
+    <span class="sp-logo" aria-hidden="true"><MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /></span>
+    <MudText Typo="Typo.h6" Class="sp-brand-name">SocialPoster</MudText>
+</MudDrawerHeader>
+
+<MudNavMenu Class="px-2" Color="Color.Primary" Rounded="true" Margin="Margin.Dense">
+    <MudNavLink Href="@SocialPosterNavigation.Link()" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.EditNote">Compose</MudNavLink>
+    <MudNavLink Href="@SocialPosterNavigation.Link("contacts")" Icon="@Icons.Material.Filled.People">Contacts</MudNavLink>
+    <MudNavLink Href="@SocialPosterNavigation.Link("history")" Icon="@Icons.Material.Filled.History">History</MudNavLink>
+    <MudNavLink Href="@SocialPosterNavigation.Link("settings")" Icon="@Icons.Material.Filled.ManageAccounts">Accounts</MudNavLink>
+</MudNavMenu>
