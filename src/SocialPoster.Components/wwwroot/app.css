@@ -39,6 +39,10 @@ h1:focus { outline: none; }
 .sp-section-label { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mud-palette-text-secondary); }
 .sp-page-header { margin-bottom: 1.5rem; }
 .sp-page-title { letter-spacing: -.02em; }
+.sp-accounts { overflow: hidden; background: var(--mud-palette-surface); }
+.sp-accounts > .mud-expand-panel { margin: 0 !important; border-radius: 0 !important; }
+.sp-account-title { display: flex; align-items: center; gap: .6rem; }
+.sp-account-actions { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; }
 
 /* ---- Composer ---- */
 .mention-host { position: relative; }

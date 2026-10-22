@@ -1,28 +1,14 @@
 <#
 .SYNOPSIS
-  Packs SocialPoster.Posting, SocialPoster.Core and SocialPoster.Components and pushes them to NuGet.
-  Posting is packed (and therefore pushed) first because Core depends on it.
-.PARAMETER ApiKey
-  NuGet API key. Defaults to the NUGET_API_KEY environment variable.
-.PARAMETER Source
-  NuGet feed URL.
-.PARAMETER SkipPush
-  Only build, test and pack; do not push.
+  Tests and packs SocialPoster.Posting, SocialPoster.Core and SocialPoster.Components locally.
+  Publishing to NuGet happens in CI via Trusted Publishing: push a v* tag (e.g. v0.5.1).
 #>
 [CmdletBinding()]
-param(
-    [string]$ApiKey = $env:NUGET_API_KEY,
-    [string]$Source = 'https://api.nuget.org/v3/index.json',
-    [switch]$SkipPush
-)
+param()
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root 'artifacts'
-
-if (-not $SkipPush -and -not $ApiKey) {
-    throw 'No API key. Pass -ApiKey or set NUGET_API_KEY (or use -SkipPush).'
-}
 
 function Invoke-Dotnet {
     & dotnet @args
@@ -38,13 +24,4 @@ foreach ($project in $projects) {
     Invoke-Dotnet pack (Join-Path $root "src/$project/$project.csproj") --configuration Release --output $artifacts
 }
 
-if ($SkipPush) {
-    Write-Host "Packed to $artifacts (push skipped)."
-    return
-}
-
-foreach ($project in $projects) {
-    Get-ChildItem $artifacts -Filter "$project.[0-9]*.nupkg" | ForEach-Object {
-        Invoke-Dotnet nuget push $_.FullName --api-key $ApiKey --source $Source --skip-duplicate
-    }
-}
+Write-Host "Packed to $artifacts. To publish, push a v* tag; CI pushes to NuGet via Trusted Publishing."
