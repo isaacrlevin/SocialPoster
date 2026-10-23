@@ -93,7 +93,7 @@ li { margin: .35rem 0; }
 .card h3 { margin: 0 0 .3rem; font-size: 1.05rem; }
 .card p { margin: 0; color: var(--muted); font-size: .94rem; }
 .platform { display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: .5rem; color: #fff; font-weight: 800; font-size: .8rem; margin-right: .45rem; vertical-align: middle; }
-.p-x { background: #111; } .p-bsky { background: #1185fe; } .p-li { background: #0a66c2; }
+.p-x { background: #111; } .p-bsky { background: #1185fe; } .p-li { background: #0a66c2; } .p-masto { background: #6364ff; } .p-threads { background: #000; }
 
 .note { border-radius: 12px; padding: .85rem 1.1rem; margin: 1.1rem 0; border: 1px solid var(--info-line); background: var(--info-bg); }
 .note.warn { border-color: var(--warn-line); background: var(--warn-bg); }

@@ -5,21 +5,29 @@ for each platform.
 
 A reusable .NET 10 backend and Blazor Razor Class Library with SQLite storage and a [MudBlazor](https://mudblazor.com)
 UI (light and dark themes, toggle in the top bar). The included Web project is a thin, local single-user sample host.
+Posts can go out now or be scheduled for later, and an optional AI agent (GitHub Copilot or any OpenAI-compatible
+provider) finds people's accounts and drafts posts from a link.
 
 **Just want to post?** The posting engine is its own package, [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md):
 publish to all five platforms from any .NET app with no database, UI or ASP.NET. `SocialPoster.Core` and the Blazor
 components build on it.
+
+| Package                                                     | What it is                                                         |
+|-------------------------------------------------------------|--------------------------------------------------------------------|
+| [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md) | Platform clients, rendering, character counting and media rules   |
+| `SocialPoster.Core`                                         | SQLite storage, contacts, history, scheduling and the account finder |
+| `SocialPoster.Components`                                   | The Blazor UI (pages, layout, theme and assets)                    |
 
 ![Compose page](img/compose.png)
 
 <details>
 <summary>More screenshots</summary>
 
-|                                    |                                         |
-|------------------------------------|-----------------------------------------|
-| ![Contacts](img/contacts.png)      | ![Edit a contact](img/contact-edit.png) |
-| ![Accounts](img/accounts.png)      | ![History](img/history.png)             |
-| ![Dark mode](img/compose-dark.png) |                                         |
+|                                                    |                                         |
+|----------------------------------------------------|-----------------------------------------|
+| ![Platform preview](img/compose-preview.png)        | ![Accounts](img/accounts.png)           |
+| ![Contacts](img/contacts.png)                      | ![Edit a contact](img/contact-edit.png) |
+| ![History](img/history.png)                        | ![Dark mode](img/compose-dark.png)      |
 
 </details>
 
@@ -39,19 +47,37 @@ It points to a **contact**, which holds that person's identity on each platform:
 | Threads  | `@username`                                                                    | Threads username          |
 
 If a contact has no account on a platform, their plain name is used and the preview shows a warning. Each platform has a
-live preview with a character counter. You can also override the text for any platform.
+card under the scheduling panel: switch **Publish** on or off for that platform, and click **Edit** to open its live
+preview with a character counter, warnings, **Copy text** and **Customize for ...** to override the text for that
+platform only. Platforms that aren't connected are marked *copy only*.
 
-To draft from an article or other public page, enter its URL in **Draft from a link** and choose **Generate**. Copilot
+To draft from an article or other public page, enter its URL in **Draft from a link** and choose **Generate**. The
+account finder agent (Copilot or your own provider, see [below](#choosing-the-agent-copilot-or-your-own-provider))
 reads the page and creates shared text plus a linked, hashtagged customized draft for each connected platform
 selected for publishing. Each customized draft appears in that platform's editor; use **Use shared text** or
 **Customize** to switch versions, and review the character counts before publishing.
 
 ### Scheduling posts
 
-Scheduling is optional: use **Publish to ...** in the composer to publish now, or choose a local date and time and click
-**Schedule selected platforms** to publish later. Scheduled posts use the selected platforms, text overrides and media.
-Timed delivery requires the app's scheduling worker to be running around the due time, and its data directory must
-remain available. X's browser-intent mode can't be scheduled because it requires you to finish publishing yourself.
+Scheduling is optional: use **Publish to ...** in the composer to publish now, or choose a local date and time in the
+**Schedule a post** panel and click **Schedule selected platforms** to publish later. Scheduled posts use the selected
+platforms, text overrides and media.
+
+- **Frozen at scheduling time.** Mentions are resolved and each platform's text is rendered and validated when you
+  schedule; media files are copied to `scheduled-media/` in the data directory. Credentials are never stored with the
+  schedule; they are read when the post goes out.
+- **Time zones.** Enter the time as shown on your local clock and pick the time zone (it defaults to the browser's).
+  Times skipped by a daylight-saving change are rejected, and times that occur twice ask you to choose a UTC offset.
+- **Managing schedules.** **Scheduled posts (n)** lists every schedule with per-platform outcomes and **View post**
+  links. Until delivery starts you can **Edit content** (loads it back into the composer), **Reschedule** or
+  **Cancel schedule**.
+- **Delivery.** The app's scheduling worker polls every 15 seconds, so it must be running around the due time and the
+  data directory must remain available. A post that is more than 24 hours overdue (for example because the app was
+  closed) expires instead of publishing unexpectedly. HTTP 429 rate limits are retried up to 3 times; other rejections
+  fail. A timeout or lost response is marked **uncertain** and not retried, because the platform may already have
+  accepted the post. Check the platform before posting again.
+- X's browser-intent mode can't be scheduled because it requires you to finish publishing yourself. Deselect X to
+  schedule the other platforms.
 
 - **X** weights each character (emoji/CJK count as 2) and every URL counts as a fixed 23 characters, matching X's `t.co`
   link wrapping.
@@ -82,6 +108,7 @@ its preview card, and you can untick a platform to skip it. Add alt text to imag
 | **Bluesky**         | Up to 4 (JPG/PNG/WebP, under 1 MB each) | Not supported by Bluesky | 1 (MP4/MOV/WebM, 100 MB, 3 min)   |
 | **X** (API posting) | Up to 4 (JPG/PNG/WebP, 5 MB each)       | 1 (15 MB)                | 1 (MP4/MOV, 512 MB)               |
 | **Mastodon**        | Up to 4 (JPG/PNG/WebP, 8 MB each)       | 1 (8 MB)                 | 1 (MP4/WebM, 40 MB)               |
+| **Threads**         | Not supported (text only)               | Not supported            | Not supported                     |
 
 A post can contain images **or** one GIF **or** one video, not a mix. X's browser composer ("Post via browser instead")
 can't receive files, so attach media there by hand.
@@ -133,7 +160,7 @@ import is available in browser-only mode, even if credentials are saved.
    and copy its access token. Grant `read:accounts`, `read:search`, `write:statuses` and `write:media`.
 2. Enter the instance's HTTPS origin (for example `https://mastodon.social`, not a profile URL) and token. **Save and
    verify** checks `/api/v1/accounts/verify_credentials` before storing the pair, encrypted at rest. Blank token retains
-   it only for the same instance. **Test saved token** verifies persisted credentials; **Forget token** removes it
+   it only for the same instance. **Test connection** verifies persisted credentials; **Forget token** removes it
    locally, without revoking it on the server.
 3. Compose, select Mastodon, review/copy the preview or platform override, and publish. Statuses are **public**. Upload
    descriptions use alt text (up to 1000 characters); the client waits for asynchronous media processing before creating
@@ -209,7 +236,7 @@ Clicking **Edit** on any row scrolls you back to the top of the page, where the 
 
 #### Contact maintenance
 
-- **Purge X / Purge Bluesky / Purge LinkedIn / Purge Mastodon** appears only for enabled platforms. The confirmation
+- **Purge X / Purge Bluesky / Purge LinkedIn / Purge Mastodon / Purge Threads** appears only for enabled platforms. The confirmation
   describes a global operation across **all contacts/accounts**, regardless of list
   filters: it removes that platform's handles, profile URLs, names, stable IDs/URNs, verification timestamps
   and cached discovery candidates. Contacts with no remaining accounts are deleted,
@@ -267,7 +294,7 @@ matches for you to pick from.
   can also click **✨ find accounts** next to a mentioned contact, or use the panel in the contact editor. **Refine**
   lets you add a full name or hints (company, role).
 - **Automatic:** when you mention a contact with no X or LinkedIn account, a search runs in the background once. Turn
-  this off in Settings.
+  this off with **Search automatically** under Accounts → Account finder agent.
 - **Picking:** each suggestion shows a confidence score, the reason it matched, and a profile link, so check it before
   clicking **Use**. Your choices and the results are cached, so each person is searched only once.
 - **LinkedIn people:** only the profile URL can be found, because the API can't tag members without partner access.
@@ -276,8 +303,10 @@ matches for you to pick from.
   **Copy @name** button and their profile link. Company pages found with a numeric ID are tagged automatically.
 - **Setup:** it uses the account you signed into with `copilot login` (the app reads the CLI's saved token from Windows
   Credential Manager), or a `GH_TOKEN`/`GITHUB_TOKEN` environment variable. If neither exists, paste a GitHub token in
-  Settings → Account finder agent. Click **Test connection** to check. The default model is `claude-haiku-4.5`: each
-  search takes about 30–45 s and uses Copilot premium requests.
+  Accounts → Account finder agent. Click **Test connection** to check. The default model is `claude-haiku-4.5`: each
+  search takes about 30–45 s and uses Copilot premium requests. To avoid Copilot entirely, add your own provider
+  (next section). [Setting up the agent's accounts](#setting-up-the-agents-accounts) lists the tokens, permissions and
+  keys each option needs.
 
 #### Choosing the agent: Copilot or your own provider
 
@@ -292,7 +321,7 @@ and are only sent to that provider's base URL; plain `http://` is accepted only 
 Models from these providers can't browse the web, so the agent is given two tools:
 
 - **`web_search`**, backed by a search service you choose under **Web search**: [Brave Search](https://brave.com/search/api/)
-  or [Tavily](https://tavily.com) (API key, both have free tiers), or your own [SearXNG](https://docs.searxng.org)
+  or [Tavily](https://tavily.com) (API key, both include free monthly usage), or your own [SearXNG](https://docs.searxng.org)
   instance (free, no key; enable `json` in its `search.formats`). Copilot has its own search and ignores this setting.
 - **`web_fetch`**, a built-in page reader that refuses localhost, private/link-local addresses (including cloud metadata
   endpoints), non-web ports and credentials in URLs, re-checks every redirect, ignores system proxies, and caps response
@@ -304,10 +333,65 @@ model. Account **verification** relies on reading the profile page itself, and X
 visitors a login wall instead of the profile, which the agent reports as inconclusive. Copilot's own fetcher gets through
 more often, so expect better verification results with Copilot.
 
-### Verifying accounts (Copilot)
+#### Setting up the agent's accounts
+
+Everything below is entered under Accounts → **Account finder agent**. **Test connection** (Copilot) or **Test**
+(providers) checks the setup before you rely on it.
+
+**GitHub Copilot**
+
+- You need a GitHub account with an active **Copilot subscription**. Requests are billed to that subscription and
+  count against its premium request allowance and rate limits. If your Copilot seat comes from an organization or
+  enterprise, its policies (IP allow lists, SAML SSO, which models are enabled) still apply.
+- SocialPoster uses the first token it finds: the **GitHub token** saved in the card, then `GH_TOKEN`, then
+  `GITHUB_TOKEN`, then (Windows only) the Copilot CLI's saved `copilot login`. A token in the card or environment
+  replaces the CLI login, so an unsuitable `GH_TOKEN` breaks the agent even if `copilot login` works.
+- Supported tokens are OAuth tokens from `copilot login` or `gh auth login` (`gho_`), GitHub App user tokens
+  (`ghu_`) and **fine-grained** personal access tokens (`github_pat_`). **Classic tokens (`ghp_`) don't work.**
+- To create a fine-grained token: open [Fine-grained tokens](https://github.com/settings/personal-access-tokens/new),
+  set **Resource owner** to your **personal account** (not an organization; the permission only exists on user-owned
+  tokens), leave **Repository access** at *Public repositories*, and under **Permissions → Account** add
+  **Copilot Requests**. No repository permissions are needed. Choose an expiration, generate the token, and paste it into
+  **GitHub token (optional)**. If an organization uses SAML SSO, authorize the token for it.
+- **Test connection** also lists the models your plan can use. Enter one of those in **Copilot model** if you don't want
+  the default.
+
+**Your own provider**
+
+The agent only calls `/chat/completions` with tool definitions, so a key needs nothing more than chat completion access
+to a model that supports **tool (function) calling**. SocialPoster sends the key as `Authorization: Bearer <key>`.
+
+| Provider               | Where to get the key                                                                 | Notes |
+|------------------------|--------------------------------------------------------------------------------------|-------|
+| **OpenAI**             | [platform.openai.com/api-keys](https://platform.openai.com/api-keys)                  | The project needs billing or credits. For a *Restricted* key, set the top-level **Model capabilities** permission to *Request* (*Write* in older UI). Enabling only its *Chat completions* sub-item can leave out the `model.request` scope and fail with "Missing scopes". |
+| **Azure OpenAI**       | Your resource's **Keys and Endpoint** page in the Azure portal or Foundry             | Deploy a tool-capable chat model first. Base URL `https://<resource>.openai.azure.com/openai/v1` (no `api-version`), and **Model** = the *deployment name*. Only API keys are supported, so key-based authentication must not be disabled on the resource; Microsoft Entra ID sign-in isn't available. |
+| **OpenRouter**         | [openrouter.ai/keys](https://openrouter.ai/keys)                                      | Pick a model that lists *tools* support. Add credits, or use a free model (they're rate limited). You can set a credit limit on the key. |
+| **Groq**               | [console.groq.com/keys](https://console.groq.com/keys)                                | Use a model Groq lists as supporting tool use. Free usage is rate limited. |
+| **Ollama** (local)     | No key                                                                                | `ollama pull llama3.1` (or another tool-capable model such as `qwen2.5`) and keep Ollama running. On another PC on your network, start it with `OLLAMA_HOST=0.0.0.0` and use `http://<that-pc>:11434/v1`. |
+| **LM Studio** (local)  | No key                                                                                | Load a tool-capable model and start the server on the **Developer** tab (default `http://localhost:1234/v1`). Turn on *Serve on Local Network* to use it from another PC. |
+| **Custom**             | Whatever the server requires as a bearer token                                        | Any OpenAI-compatible `/chat/completions` endpoint. Leave the key blank if it needs none. |
+
+Plain `http://` is only accepted for this computer or private network addresses, so hosted services must use HTTPS.
+
+**Web search (needed for your own provider)**
+
+- **Brave Search:** create an account at the [Brave Search API dashboard](https://api-dashboard.search.brave.com) (it's
+  separate from any Brave browser account), activate the **Search** plan, then create a key under **API Keys**. Brave
+  requires a card on file and includes a monthly free credit; usage beyond it is billed. SocialPoster sends the key as
+  `X-Subscription-Token`.
+- **Tavily:** sign up at [app.tavily.com](https://app.tavily.com) and copy the API key (`tvly-…`) from the overview
+  page. The free plan includes 1,000 credits a month with no card required; SocialPoster uses basic search, which
+  costs one credit per search.
+- **SearXNG:** run your own instance (for example the official Docker image) and enter its URL, for example
+  `http://localhost:8080`. In its `settings.yml`, add `json` to `search.formats` (for example
+  `formats: [html, json]`) and restart. Otherwise every search returns 403. If the instance's limiter is on
+  (`server.limiter: true`), it may also block SocialPoster as a bot; turn the limiter off for a private instance, or add
+  this computer's IP to `pass_ip` in `limiter.toml`. Public instances usually disable JSON, so use your own.
+
+### Verifying accounts with the agent
 
 X's lookup API costs a request each time, and LinkedIn has no lookup at all for other members. The **✨ Verify** buttons
-in the contact editor instead ask the same Copilot agent to check, via web search, whether a specific X handle or
+in the contact editor instead ask the selected agent to check, via web search, whether a specific X handle or
 LinkedIn profile URL is real and currently active, and report back the exact name it found. It's slower than a direct
 API call (a web search, not a database check) but works without X credentials and is the only way to check a LinkedIn
 profile at all. Confirm the result against the profile link before relying on it.
@@ -319,8 +403,8 @@ profile at all. Confirm the result against the profile link before relying on it
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git
 - Optional: the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli) (or a GitHub
-  token) for the account finder. Nothing else is required to try the app: Bluesky search and "Copy text" work without
-  any account.
+  token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder. Nothing else is
+  required to try the app: Bluesky search and "Copy text" work without any account.
 
 ### Run it
 
@@ -331,14 +415,15 @@ dotnet run --launch-profile http    # http://localhost:5184
 ```
 
 Works on Windows, Linux and macOS. The database is created automatically on first run; there is no migration or setup
-step. Then open **Settings** to connect the accounts you want to post to
-(see [Connecting accounts](#connecting-accounts)).
+step. Then open **Accounts** to choose your platforms and connect the ones you want to post to
+(see [Connecting accounts](#connecting-accounts)). The sample runs the scheduling worker, so scheduled posts go out
+while it is running.
 
 Run the tests from the `src` folder with `dotnet test`.
 
 ### Configuration
 
-There are no API keys to put in config files. Credentials are entered in the app's **Settings** page and stored locally.
+There are no API keys to put in config files. Credentials are entered in the app's **Accounts** page and stored locally.
 The sample binds the `SocialPoster` configuration section to `SocialPosterOptions`:
 
 | Setting                                                           | Default                                                                                                                                 | Notes                                                                   |
@@ -347,32 +432,50 @@ The sample binds the `SocialPoster` configuration section to `SocialPosterOption
 | `SocialPoster:DatabaseFileName`                                   | `socialposter.db`                                                                                                                       | File name inside the data directory; no directory separators            |
 | `SocialPoster:PostingTimeout`                                     | `00:30:00`                                                                                                                              | HTTP timeout for platform clients, including media uploads              |
 
+Scheduling options bind from `SocialPoster:Scheduling` (env: `SocialPoster__Scheduling__PollInterval` and so on):
+
+| Setting           | Default    | Notes                                                                       |
+|-------------------|------------|-----------------------------------------------------------------------------|
+| `PollInterval`    | `00:00:15` | How often the worker looks for due posts                                    |
+| `AttemptTimeout`  | `00:30:00` | Time limit for one delivery attempt                                         |
+| `LeaseDuration`   | `00:35:00` | How long a worker owns a claimed post; must be longer than `AttemptTimeout` |
+| `MaxLateness`     | `1.00:00:00` | Posts overdue by more than this expire instead of publishing            |
+| `MaxAttempts`     | `3`        | HTTP 429 retries per platform (1–10)                                        |
+| `RetryDelay`      | `00:05:00` | Base delay between retries, multiplied by the attempt number                |
+
 To change the port, set `ASPNETCORE_URLS` (for example `ASPNETCORE_URLS=http://localhost:8080 dotnet run`) or edit
 `Properties/launchSettings.json`.
 
 ## Embed SocialPoster in your own project
 
-Two packable libraries contain the implementation:
+Three packable libraries contain the implementation, all published to NuGet with the same version:
 
-- **SocialPoster.Core**: domain models/rendering, `SocialPoster.Core.Data.AppDbContext`, protected settings, platform
-  clients, contact/publishing services and Copilot account search. Requires the ASP.NET Core shared framework, EF Core
-  SQLite and GitHub.Copilot.SDK; it has no UI or Web dependency.
+- **SocialPoster.Posting**: platform clients (`BlueskyClient`, `XClient`, `LinkedInClient`, `MastodonClient`,
+  `ThreadsClient`), `SocialPublisher`, post rendering, character counting, media rules and `ICredentialStore`. Needs
+  only `Microsoft.Extensions.Http`/`Options`; no database, UI or ASP.NET. See its
+  [own README](src/SocialPoster.Posting/README.md).
+- **SocialPoster.Core**: `SocialPoster.Core.Data.AppDbContext`, encrypted settings (`SecretStore`, which is the
+  `ICredentialStore`), contact/publishing services, optional scheduling, and the account finder agent. Depends on
+  Posting and requires the ASP.NET Core shared framework, EF Core SQLite, Microsoft.Extensions.AI (OpenAI-compatible
+  providers) and GitHub.Copilot.SDK; it has no UI or Web dependency.
 - **SocialPoster.Components**: all pages, layouts, shared components, theme, scripts and static assets. Depends on Core
   and MudBlazor, never on the sample Web project. Requires **Blazor interactive server** hosting: SQLite, protected
-  credentials and the Copilot SDK run on the server, not in WebAssembly.
+  credentials and the agent run on the server, not in WebAssembly.
 
 ### Packages and backend registration
 
 Pack locally (these commands do not publish anything):
 
 ```powershell
+dotnet pack src/SocialPoster.Posting/SocialPoster.Posting.csproj -c Release -o artifacts/packages
 dotnet pack src/SocialPoster.Core/SocialPoster.Core.csproj -c Release -o artifacts/packages
 dotnet pack src/SocialPoster.Components/SocialPoster.Components.csproj -c Release -o artifacts/packages
 ```
 
-Add `artifacts/packages` as a NuGet source for local testing. Both packages include this README and the MIT license.
-Their NuGet dependencies are transitive, including `SocialPoster.Core` from Components; do not copy DLLs or use
-`PrivateAssets="all"` on the library references.
+Add `artifacts/packages` as a NuGet source for local testing, or run `scripts/publish-local.ps1` (see
+[Releasing](#releasing)), which packs all three with a fresh prerelease version into a local feed. Core and Components
+include this README; Posting includes its own; all include the MIT license. Their NuGet dependencies are transitive
+(Components → Core → Posting); do not copy DLLs or use `PrivateAssets="all"` on the library references.
 
 For example, a .NET 10 Blazor Web App named `MyHost` uses:
 
@@ -384,13 +487,13 @@ For example, a .NET 10 Blazor Web App named `MyHost` uses:
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SocialPoster.Components" Version="1.0.0" />
+    <PackageReference Include="SocialPoster.Components" Version="0.5.1" />
   </ItemGroup>
 </Project>
 ```
 
-For backend-only use, reference `SocialPoster.Core` version `1.0.0` instead. In a repository checkout,
-`ProjectReference` to the corresponding `.csproj` works identically.
+For backend-only use, reference `SocialPoster.Core` instead, or just `SocialPoster.Posting` to publish without any
+storage. In a repository checkout, `ProjectReference` to the corresponding `.csproj` works identically.
 
 `Program.cs` for a consumer with its own `MyHost.Components.App` document:
 
@@ -406,6 +509,8 @@ builder.Services.AddSocialPosterCore(options =>
     options.DatabaseFileName = "socialposter.db";
     options.PostingTimeout = TimeSpan.FromMinutes(30);
 });
+builder.Services.AddSocialPosterScheduling();       // optional: scheduled posts
+builder.Services.AddSocialPosterSchedulingWorker(); // optional: publish them from this process
 builder.Services.AddSocialPosterComponents(); // default links: socialposter/...
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
@@ -423,10 +528,11 @@ app.Run();
 ```
 
 `AddSocialPosterCore(Action<SocialPosterOptions>?)` registers `IDbContextFactory<AppDbContext>`, singleton
-`SecretStore`, `AccountFinder`, `AccountSearchService`, scoped `ContactService`/`PublishService`, and typed HTTP clients
-`BlueskyClient`, `XClient`, `LinkedInClient`, `MastodonClient`. Mastodon uses per-request bearer authentication, a
-credential-pair snapshot per operation and a handler with redirects disabled; hosts replacing its HTTP handler must also
-disable redirects to prevent forwarding credentials. It registers Data Protection services but leaves host-wide identity
+`SecretStore` (also registered as the Posting `ICredentialStore`), `AgentSettingsStore`, `AccountFinder`,
+`AccountSearchService`, scoped `ContactService`/`PublishService`, and everything from `AddSocialPosting()`:
+`SocialPublisher` and typed HTTP clients `BlueskyClient`, `XClient`, `LinkedInClient`, `MastodonClient`,
+`ThreadsClient`, using `PostingTimeout`. Mastodon and Threads use per-request bearer authentication and handlers with
+redirects disabled; hosts replacing those HTTP handlers must also disable redirects to prevent forwarding credentials. It registers Data Protection services but leaves host-wide identity
 and key management alone. Registration performs no filesystem/database initialization and never builds a temporary
 service provider. Consumers may bind configuration instead:
 `options => builder.Configuration.GetSection("SocialPoster").Bind(options)`.
@@ -437,6 +543,37 @@ sequential repeat calls are supported. This is **not** an EF migrations workflow
 with other applications/tables, run it concurrently from multiple instances, or mix `EnsureCreated` with migrations.
 Host startup owns failures and cancellation. Initialization does not configure the key ring; newly created data
 directories get owner-only permissions on Unix, but existing directory permissions are the host's responsibility.
+
+### Scheduling in your host
+
+Scheduling is opt-in and lives in `SocialPoster.Core.Scheduling`:
+
+- `AddSocialPosterScheduling(Action<SchedulingOptions>?)` registers `SchedulingService`, `ScheduledPostExecutor` and
+  default adapters: `SqliteScheduledPostStore` (a `ScheduledPosts` table in the SocialPoster database, created by
+  `InitializeSocialPosterAsync`), `FileScheduledMediaStore` (`DataDirectory/scheduled-media`) and
+  `LocalScheduledCredentials` (reads the encrypted settings at delivery time). It adds no background work. Options and
+  defaults are listed under [Configuration](#configuration).
+- `AddSocialPosterSchedulingWorker()` adds a hosted service that polls for due posts in this process. Leave it out if
+  something else runs delivery, for example a separate always-on worker process that calls
+  `ScheduledPostExecutor.RunDueAsync` in a fresh scope.
+- Without `AddSocialPosterScheduling`, the composer hides the scheduling panel. To hide it even when registered, set
+  `EnableScheduling="false"` on `SocialPosterPage`, `SocialPosterView` or `Home`.
+
+Each adapter is an interface you can replace (registrations use `TryAdd`, so register yours first):
+`IScheduledPostStore` (must implement atomic claim/compare-exchange with leases), `IScheduledMediaStore`,
+`IScheduledCredentialProvider` and `IScheduledPlatformPublisher`. For a store shared by several workers, Core includes
+`SqlServerScheduledPostStore(Func<DbConnection>)` for SQL Server/Azure SQL. Supply your own provider connections (for
+example `Microsoft.Data.SqlClient`; Core adds no SQL Server dependency) and call its `InitializeAsync` once at
+deployment to create `dbo.SocialPosterSchedules`:
+
+```csharp
+builder.Services.AddScoped<IScheduledPostStore>(_ =>
+    new SqlServerScheduledPostStore(() => new SqlConnection(connectionString)));
+builder.Services.AddSocialPosterScheduling();
+```
+
+Schedule records hold rendered text and media references, never credentials. Replace `IScheduledCredentialProvider`
+when a non-local host keeps credentials elsewhere.
 
 ### Routed UI, assets and providers
 
@@ -535,7 +672,7 @@ If your app is deployed under `/myapp/`, set up the host's path-base/proxy confi
 library middleware changes the host's path base.
 
 For inline UI inside your existing layout, render `SocialPoster.Components.Pages.Home` (composer), `Contacts`, `History`
-or `Settings` directly instead of `SocialPosterView`. For example:
+or `Settings` (the Accounts page) directly instead of `SocialPosterView`. For example:
 
 ```razor
 @using MudBlazor
@@ -581,7 +718,7 @@ For built-in routes or a common default across standalone pages, configure
 A component parameter overrides that default and limits which switches appear on Accounts.
 Saved Accounts switches can disable an allowed platform, but cannot enable one excluded by the host.
 Omitting the parameter inherits the enclosing
-view or registered defaults (all three platforms by default); an empty collection disables
+view or registered defaults (all five platforms by default); an empty collection disables
 all platforms. Copilot discovery searches only enabled X/LinkedIn platforms and is hidden
 when neither is enabled. Its cached searches are separated by searchable platform selection.
 Existing credentials, contact identities, and history remain stored, so re-enabling a
@@ -614,13 +751,16 @@ not change another application's identity just to import SocialPoster data. The 
 Copilot uses locally configured tokens, process `GH_TOKEN`/`GITHUB_TOKEN` or the Windows Copilot CLI login. Its SDK
 ships/downloads the CLI according to the SDK package's build/runtime conventions; consumer build/runtime environments
 need compatible platform assets and network access for that setup. Do not assume a server should inherit a developer's
-login. Disable account finding in Settings if unwanted.
+login. Custom providers and web search services are stored per database, like other credentials, and the built-in
+`web_fetch` tool makes outbound requests from the server (with the restrictions described above). Disable account
+finding under Accounts → Account finder agent if unwanted.
 
 ### Security notes
 
 - **Local use only.** The app has no login. Anyone who can reach it can post as you, so keep it bound to `localhost` and
   don't expose it to a network or the internet.
-- Credentials (app passwords, X keys, LinkedIn token, GitHub token) are stored in the local SQLite database, encrypted
+- Credentials (Bluesky app password, X keys, LinkedIn/Mastodon/Threads tokens, GitHub token, agent provider and web
+  search API keys) are stored in the local SQLite database, encrypted
   with ASP.NET Core Data Protection. On Windows the key ring is protected with DPAPI. On Linux and macOS there is no
   OS-level key protection, so the keys rely on owner-only file permissions (the app sets the data folder to `700`).
   Treat the data folder like you would an SSH key.
@@ -628,13 +768,16 @@ login. Disable account finding in Settings if unwanted.
   you'll need to re-enter your credentials.
 - Use a Bluesky **app password**, never your main password.
 - Reading the Copilot CLI's saved login from the OS credential store is only implemented on Windows. On Linux/macOS set
-  `GH_TOKEN` or `GITHUB_TOKEN`, or paste a token in Settings.
+  `GH_TOKEN` or `GITHUB_TOKEN`, or paste a token under Accounts → Account finder agent.
 
 ## Connecting accounts
 
+Open **Accounts**. Use **Selected platforms** to switch on the platforms you use, then expand each platform's card to
+connect it. A **Connected** badge shows which ones can publish; the rest stay *copy only* in the composer.
+
 **Bluesky**
 
-1. Go to Settings → Privacy and security → App passwords and create one.
+1. In Bluesky, go to Settings → Privacy and security → App passwords and create one.
 2. Enter your handle and the app password.
 3. Set a custom PDS under *Advanced* if you don't use `bsky.social`.
 
@@ -680,13 +823,33 @@ redirect URL under the **Auth** tab and exchange the code for a token), any toke
 SocialPoster uses the supplied token as-is and never requests or revokes one. **Forget token** only removes the locally
 stored copy; it does not invalidate the token at LinkedIn. LinkedIn's normal token expiration still applies.
 
+**Mastodon**
+
+See [Connecting Mastodon and importing follows](#connecting-mastodon-and-importing-follows): create an application
+under **Preferences → Development** on your instance, then enter the instance URL and access token and click **Save and
+verify**.
+
+**Threads**
+
+1. Create an app in the [Meta developer portal](https://developers.facebook.com/apps) with the **Threads API** use
+   case, and add your Threads account as a Threads tester (accept the invite in Threads).
+2. Generate a user access token with `threads_basic` and `threads_content_publish`.
+3. In SocialPoster open **Accounts → Threads**, paste it into **Access token** and click **Save and verify**. The app
+   checks the token with the Threads Graph API and shows "Connected as @*username*". **Test connection** re-checks it
+   later; **Forget token** removes the local copy only.
+
+SocialPoster uses the token as-is and doesn't refresh it, so generate a new one when it expires. Threads posts are
+public and text only.
+
 "Copy text" works without any accounts connected. LinkedIn's copied text uses plain names, because tags only work
 through the API.
 
 ## Limitations
 
-- No threads. Media is limited to what each platform accepts (see [Images, GIFs and video](#images-gifs-and-video));
-  Bluesky doesn't support GIFs.
+- No multi-post threads (reply chains); each publish is a single post. Media is limited to what each platform accepts
+  (see [Images, GIFs and video](#images-gifs-and-video)); Bluesky doesn't support GIFs and Threads is text only.
+- No OAuth sign-in flows: you paste tokens generated on each platform, and SocialPoster never refreshes them.
+- Scheduled posts only go out while the scheduling worker is running.
 - LinkedIn people can't be tagged automatically unless you know their URN. The Copilot finder gets their profile URL,
   and you tag them by hand after posting. Organization vanity lookup requires Community Management API access.
 - X lookups and posts cost money depending on your X API tier, unless you use the browser intent-post option, which is
@@ -696,12 +859,29 @@ through the API.
 ## Contributing
 
 Issues and pull requests are welcome. Please run `dotnet build` and `dotnet test` from the `src` folder before
-submitting (CI runs both on Linux and Windows). Keep backend/domain logic in `SocialPoster.Core`, reusable UI in
-`SocialPoster.Components`, and hosting policy in the Web sample, with relevant tests.
+submitting (CI runs both on Linux and Windows). Keep platform posting in `SocialPoster.Posting`, app services and
+storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web sample, with
+relevant tests.
 
 The setup guide site lives in `docs/` (screenshots come from `img/`) and is deployed by `.github/workflows/pages.yml`.
 To enable it on a fork, go to **Settings → Pages** and set **Source** to **GitHub Actions**. Preview locally by copying
 `img/` into a copy of `docs/` and opening `index.html`.
+
+### Releasing
+
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.5.1`).
+
+- **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
+  Components as `<version>-local.<timestamp>` into `~/.nuget-local` (`-FeedPath` to change it, `-Register` to add it as
+  the `SocialPosterLocal` NuGet source, `-SkipTests` to skip tests).
+- **Check the release packages:** `scripts/publish-nuget.ps1` runs the tests and packs all three into `artifacts/`. It
+  doesn't publish.
+- **Publish:** bump the version in all three projects, commit, and push a matching tag (for example `v0.5.1`). The CI
+  `publish` job packs and pushes to nuget.org with
+  [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
+  workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
+  policy for this repository and workflow on nuget.org, and a `NUGET_USER` secret holding the nuget.org user name.
+  Versions that already exist are skipped.
 
 ## License
 
@@ -709,8 +889,11 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ## Layout
 
-- `src/SocialPoster.Core`: domain/rendering, models, services, EF Core/SQLite, platform clients and backend
-  registration/initialization (NuGet).
+- `src/SocialPoster.Posting`: platform clients, rendering, text metrics, media rules and `AddSocialPosting()` (NuGet).
+- `src/SocialPoster.Core`: EF Core/SQLite, encrypted settings, contacts, history, scheduling, the account finder agent
+  and backend registration/initialization (NuGet).
 - `src/SocialPoster.Components`: reusable Blazor UI, theme, styles/scripts/assets and UI registration (NuGet).
 - `src/SocialPoster.Web`: thin runnable sample, root-route wrappers, local key-ring and hosting policy.
 - `src/SocialPoster.Tests`: xUnit tests.
+- `scripts/`: local packing scripts (see [Releasing](#releasing)).
+- `docs/`: the GitHub Pages setup guide.

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SocialPoster: write one post, publish to X, Bluesky, LinkedIn and Mastodon</title>
-  <meta name="description" content="A local Blazor app that publishes one post to X, Bluesky, LinkedIn and Mastodon with mentions converted correctly for each platform. Setup guide and documentation.">
+  <title>SocialPoster: write one post, publish to X, Bluesky, LinkedIn, Mastodon and Threads</title>
+  <meta name="description" content="A local Blazor app that publishes one post to X, Bluesky, LinkedIn, Mastodon and Threads, now or on a schedule, with mentions converted correctly for each platform. Setup guide and documentation.">
   <meta property="og:title" content="SocialPoster">
-  <meta property="og:description" content="Write one post and publish it to X, Bluesky, LinkedIn and Mastodon, with mentions converted correctly for each platform.">
+  <meta property="og:description" content="Write one post and publish it to X, Bluesky, LinkedIn, Mastodon and Threads, with mentions converted correctly for each platform.">
   <meta property="og:image" content="img/compose.png">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b5bf0'/%3E%3Cpath d='M8 16l16-7-5 14-3-6z' fill='white'/%3E%3C/svg%3E">
@@ -16,12 +16,12 @@
 <header class="hero">
   <div class="logo" aria-hidden="true">➤</div>
   <h1>SocialPoster</h1>
-  <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong> and <strong>Mastodon</strong>, with @-mentions converted correctly for each platform.</p>
+  <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong>, <strong>Mastodon</strong> and <strong>Threads</strong>, now or on a schedule, with @-mentions converted correctly for each platform.</p>
   <div class="btns">
     <a class="btn primary" href="#quick-start">Get started</a>
     <a class="btn" href="https://github.com/isaacrlevin/SocialPoster">View on GitHub</a>
   </div>
-  <div class="hero-shot"><img src="img/compose.png" alt="The Compose page with a draft post and a live preview for X, Bluesky and LinkedIn"></div>
+  <div class="hero-shot"><img src="img/compose.png" alt="The Compose page with a draft post, the scheduling panel and a card for each of the five platforms"></div>
 </header>
 
 <div class="wrap">
@@ -33,15 +33,19 @@
     <a class="sub" href="#bluesky">Bluesky</a>
     <a class="sub" href="#x">X</a>
     <a class="sub" href="#linkedin">LinkedIn</a>
-    <a class="sub" href="#copilot">Copilot finder</a>
+    <a class="sub" href="#mastodon">Mastodon</a>
+    <a class="sub" href="#threads">Threads</a>
+    <a class="sub" href="#agent">Account finder agent</a>
     <a href="#using">Using the app</a>
-    <a class="sub" href="#mentions">Mentions</a>
-    <a class="sub" href="#scheduling">Optional scheduling</a>
+    <a class="sub" href="#mentions">Mentions &amp; previews</a>
+    <a class="sub" href="#draft">Draft from a link</a>
+    <a class="sub" href="#scheduling">Scheduling</a>
     <a class="sub" href="#media">Images, GIFs &amp; video</a>
-    <a class="sub" href="#import">Import Bluesky contacts</a>
+    <a class="sub" href="#import">Import your follows</a>
     <a class="sub" href="#contacts">Managing contacts</a>
     <a href="#screenshots">Screenshots</a>
     <a href="#config">Configuration</a>
+    <a href="#embed">Packages &amp; embedding</a>
     <a href="#security">Security</a>
     <a href="#limits">Limitations</a>
     <a href="#troubleshooting">Troubleshooting</a>
@@ -52,12 +56,14 @@
     <section id="features">
       <h2>Features</h2>
       <div class="cards">
-        <div class="card"><h3>One post, three platforms</h3><p>Write once. Each platform gets its own live preview with an accurate character counter.</p></div>
+        <div class="card"><h3>One post, five platforms</h3><p>Write once for X, Bluesky, LinkedIn, Mastodon and Threads. Each platform gets its own preview with an accurate character counter, and you can customize the text per platform.</p></div>
         <div class="card"><h3>Mentions that work</h3><p>Type <kbd>@</kbd> to find someone. They're tagged properly on each platform, using their real identity there.</p></div>
-        <div class="card"><h3>Images, GIFs &amp; video</h3><p>Attach media with per-platform limit checks and alt text. Works for LinkedIn, Bluesky and X.</p></div>
-        <div class="card"><h3>Import your contacts</h3><p>Pull in everyone you follow on Bluesky with one click, then fill in their X and LinkedIn accounts.</p></div>
-        <div class="card"><h3>Copilot account finder</h3><p>An optional GitHub Copilot agent searches the web for someone's X and LinkedIn accounts.</p></div>
+        <div class="card"><h3>Schedule for later</h3><p>Publish now, or pick a local date and time. Edit, reschedule or cancel until it goes out.</p></div>
+        <div class="card"><h3>Images, GIFs &amp; video</h3><p>Attach media with per-platform limit checks and alt text on LinkedIn, Bluesky, X and Mastodon.</p></div>
+        <div class="card"><h3>Import your contacts</h3><p>Pull in everyone you follow on Bluesky, X or Mastodon, with duplicate review and merging.</p></div>
+        <div class="card"><h3>AI account finder</h3><p>An optional agent finds people's X and LinkedIn accounts and drafts posts from a link. Use GitHub Copilot, or any OpenAI-compatible provider, including local models.</p></div>
         <div class="card"><h3>Local and private</h3><p>Runs on your computer. Credentials are encrypted in a local SQLite database and never leave it.</p></div>
+        <div class="card"><h3>Reusable packages</h3><p>Use the posting engine on its own from any .NET app, or embed the whole UI in your own Blazor host.</p></div>
       </div>
       <p>SocialPoster is a Blazor Server app on .NET 10 with a MudBlazor UI (light and dark themes). It works on Windows, Linux and macOS.</p>
     </section>
@@ -68,34 +74,24 @@
       <ul>
         <li>The <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 SDK</a></li>
         <li>Git</li>
-        <li><em>Optional:</em> the <a href="https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli">GitHub Copilot CLI</a> (or a GitHub token) for the account finder</li>
+        <li><em>Optional:</em> the <a href="https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli">GitHub Copilot CLI</a> (or a GitHub token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder</li>
       </ul>
       <h3>Run it</h3>
 <pre><code>git clone https://github.com/isaacrlevin/SocialPoster.git
 cd SocialPoster/src/SocialPoster.Web
 dotnet run --launch-profile http</code></pre>
-      <p>Open <a href="http://localhost:5184">http://localhost:5184</a>. The database is created automatically on first run, so there is no migration or setup step.</p>
+      <p>Open <a href="http://localhost:5184">http://localhost:5184</a>. The database is created automatically on first run, so there is no migration or setup step. The sample also runs the scheduling worker, so scheduled posts go out while it's running.</p>
       <div class="note">
         <strong>Try it with nothing connected</strong>
         <p>Bluesky search and <em>Copy text</em> work without any account. Connect the platforms you want to publish to on the <em>Accounts</em> page.</p>
       </div>
-      <p>To run the tests, use <code>dotnet test</code> from the repository root. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>.</p>
+      <p>To run the tests, use <code>dotnet test</code> from the <code>src</code> folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>.</p>
     </section>
 
     <section id="connect">
       <h2>Connect your accounts</h2>
-      <p>Open <strong>Accounts</strong> in the sidebar. You only need to connect the platforms you want to publish to; the rest stay "copy only".</p>
-      <figure><img src="img/accounts.png" alt="The Accounts page with cards for Bluesky, X, LinkedIn and the Copilot finder" loading="lazy"><figcaption>The Accounts page</figcaption></figure>
-
-      <h3 id="mastodon">Ⓜ Mastodon</h3>
-      <ol class="steps">
-        <li>Enable Mastodon under <strong>Accounts</strong>. On your home instance, open <strong>Preferences → Development</strong>, create an application and copy its access token with <code>read:accounts</code>, <code>read:search</code>, <code>write:statuses</code> and <code>write:media</code> permissions.</li>
-        <li>Enter the HTTPS instance origin (for example <code>https://mastodon.social</code>, not a profile URL) and token. <strong>Save and verify</strong> checks the account before protecting and saving both values. Changing instance requires a new token; leaving it blank keeps the token only on the same instance.</li>
-        <li><strong>Test saved token</strong> checks persisted credentials. <strong>Forget token</strong> removes it locally; revoke it on your instance if needed. Disabling Mastodon keeps saved credentials and contacts.</li>
-      </ol>
-      <p>Use the normal platform selection, preview, override, copy, publish and history workflows. Posts are <strong>public</strong>. Mastodon counts graphemes, URLs as 23 characters and remote mentions as their local <code>@username</code>. Detection covers HTTP(S) and common bare-domain links, excluding emails and mention domains; unusual URL syntax may differ from the server parser. The app uses conservative defaults, not dynamic instance discovery: 500 characters; four 8 MB JPG/PNG/WebP images, one 8 MB GIF, or one 40 MB MP4/WebM video, without mixing kinds. Alt text becomes the media description (up to 1000 characters). Upload processing finishes before posting; upload, processing, validation, rate-limit and reconnect errors are shown. Failed attempts can leave uploaded media on the server.</p>
-      <p>Connected-instance search works in the composer. Contacts supports fully qualified <code>user@server</code>, local-handle lookup/verification, profile links, filtering and badges. <strong>Sync Mastodon follows</strong> imports paginated follows with progress and conflict safeguards. Stable identity uses the canonical ActivityPub actor URI, not server-local numeric IDs. Explicit qualified accts and Mastodon-shaped profile links in bios can link accounts; ambiguous/conflicting evidence requires review. Merge and purge include Mastodon while retaining other identities. Existing databases upgrade automatically.</p>
-      <p>Mastodon <strong>4.2 or newer</strong> is required for canonical actor URIs. Local accts use the canonical actor domain, including when the instance uses a different web domain. Unknown remote accounts fall back from exact lookup to resolving search; unrelated results are rejected. Empty HTTP 206 media responses are treated as still processing. HTTPS origins are required. Server limits and discovery availability may vary. Copilot discovery remains X/LinkedIn only; OAuth authorization/token generation or refresh, visibility selection and account-migration inference are not included.</p>
+      <p>Open <strong>Accounts</strong> in the sidebar. Under <strong>Selected platforms</strong>, switch on the platforms you use; turning one off hides it everywhere but keeps its credentials and contacts. Then expand each platform's card to connect it. You only need to connect the platforms you want to publish to; the rest stay "copy only".</p>
+      <figure><img src="img/accounts.png" alt="The Accounts page: platform switches, a card for each platform and the account finder agent" loading="lazy"><figcaption>The Accounts page</figcaption></figure>
 
       <h3 id="bluesky"><span class="platform p-bsky">🦋</span>Bluesky</h3>
       <ol class="steps">
@@ -107,7 +103,7 @@ dotnet run --launch-profile http</code></pre>
 
       <h3 id="x"><span class="platform p-x">𝕏</span>X</h3>
       <p>There are two ways to post to X.</p>
-      <p><strong>Option A: browser (free).</strong> Turn on <em>Post via browser instead</em> in the X card and save. Publishing then opens <code>x.com/intent/post</code> in a new tab with your text pre-filled, and you click <strong>Post</strong> yourself. No API access or credentials are needed. This route can't attach media files.</p>
+      <p><strong>Option A: browser (free).</strong> Turn on <em>Post via browser instead</em> in the X card and save. Publishing then opens <code>x.com/intent/post</code> in a new tab with your text pre-filled, and you click <strong>Post</strong> yourself. No API access or credentials are needed. This route can't attach media files and can't be scheduled.</p>
       <p><strong>Option B: X API (paid plan required).</strong></p>
       <ol class="steps">
         <li>Create a project and app in the <a href="https://developer.x.com/en/portal/dashboard">X developer portal</a>.</li>
@@ -117,7 +113,7 @@ dotnet run --launch-profile http</code></pre>
       </ol>
       <div class="note warn">
         <strong>X API costs</strong>
-        <p>Free X API tiers don't allow posting, and each username lookup counts against your plan. The credentials are also used by the <em>Verify</em> button in the contact editor.</p>
+        <p>Free X API tiers don't allow posting, and each username lookup counts against your plan. The credentials are also used by the <em>Verify</em> button in the contact editor and by <em>Sync X follows</em>.</p>
       </div>
 
       <h3 id="linkedin"><span class="platform p-li">in</span>LinkedIn: get an access token</h3>
@@ -141,64 +137,132 @@ dotnet run --launch-profile http</code></pre>
       </div>
       <p>Prefer to run the standard OAuth flow yourself? Add <code>http://localhost</code> as a redirect URL on the app's <em>Auth</em> tab and exchange the code for a token. Any token with the same three scopes works.</p>
 
-      <h3 id="copilot">✨ Copilot account finder (optional)</h3>
-      <p>A GitHub Copilot agent can search the web for someone's X and LinkedIn accounts and suggest matches. It's useful because LinkedIn has no member search and X lookups cost API requests.</p>
+      <h3 id="mastodon"><span class="platform p-masto">M</span>Mastodon</h3>
+      <ol class="steps">
+        <li>On your home instance, open <strong>Preferences → Development</strong>, create an application and copy its access token. Grant <code>read:accounts</code>, <code>read:search</code>, <code>write:statuses</code> and <code>write:media</code>.</li>
+        <li>On the Accounts page enter the HTTPS instance origin (for example <code>https://mastodon.social</code>, not a profile URL) and the token, then click <strong>Save and verify</strong>. The account is checked before both values are encrypted and saved. Changing instance requires a new token; leaving the token blank keeps it only on the same instance.</li>
+        <li><strong>Test connection</strong> checks the saved credentials. <strong>Forget token</strong> removes it locally; revoke it on your instance if needed.</li>
+      </ol>
+      <p>Posts are <strong>public</strong>. Mastodon counts graphemes, URLs as 23 characters and remote mentions as their local <code>@username</code>. The app uses conservative defaults, not dynamic instance discovery: 500 characters; four 8 MB JPG/PNG/WebP images, one 8 MB GIF, or one 40 MB MP4/WebM video. Alt text becomes the media description (up to 1000 characters), and upload processing finishes before posting. Failed attempts can leave uploaded media on the server.</p>
+      <p>Connected-instance search works in the composer, and Contacts supports fully qualified <code>user@server</code> accounts, local-handle lookup/verification, profile links and <strong>Sync Mastodon follows</strong>. Stable identity uses the canonical ActivityPub actor URI, so Mastodon <strong>4.2 or newer</strong> is required. HTTPS origins are required. OAuth authorization, token refresh and visibility selection are not included.</p>
+
+      <h3 id="threads"><span class="platform p-threads">@</span>Threads</h3>
+      <ol class="steps">
+        <li>Create an app in the <a href="https://developers.facebook.com/apps">Meta developer portal</a> with the <strong>Threads API</strong>, and add your Threads account as a Threads tester (accept the invite in Threads).</li>
+        <li>Generate a user access token with <code>threads_basic</code> and <code>threads_content_publish</code>.</li>
+        <li>On the Accounts page paste it into <strong>Access token</strong> and click <strong>Save and verify</strong>. The app checks it with the Threads Graph API and shows "Connected as <em>@username</em>". <strong>Test connection</strong> re-checks it later; <strong>Forget token</strong> removes the local copy.</li>
+      </ol>
+      <p>Threads posts are public and <strong>text only</strong>: the API accepts media only by public URL, not uploads, so selecting Threads with attachments shows a validation error. Text is counted in graphemes against a 500-character limit. Contacts store a Threads username, which you add by hand (follow sync isn't available). SocialPoster doesn't refresh the token, so generate a new one when it expires.</p>
+
+      <h3 id="agent">✨ Account finder agent (optional)</h3>
+      <p>An AI agent can search the web for someone's X and LinkedIn accounts and suggest matches, verify a handle or profile, and draft posts from a link. It's useful because LinkedIn has no member search and X lookups cost API requests. Configure it under <em>Accounts → Account finder agent</em>, and choose the agent from the chips:</p>
       <ul>
-        <li>It uses the account you signed into with <code>copilot login</code>. On Windows the app reads the CLI's saved token from Credential Manager. On Linux and macOS set <code>GH_TOKEN</code> or <code>GITHUB_TOKEN</code>, or paste a token under <em>Accounts → Copilot account finder</em>.</li>
-        <li>Click <strong>Test connection</strong> to check it and list the models available to you. The default is <code>claude-haiku-4.5</code>; a search takes about 30 to 45 seconds and uses Copilot premium requests.</li>
-        <li>Searches can run on demand or automatically (once per contact). Turn off the automatic search in the same card.</li>
+        <li><strong>GitHub Copilot</strong> (default). It uses the account you signed into with <code>copilot login</code>. On Windows the app reads the CLI's saved token from Credential Manager. On Linux and macOS set <code>GH_TOKEN</code> or <code>GITHUB_TOKEN</code>, or paste a GitHub token in the card. The default model is <code>claude-haiku-4.5</code>; a search takes about 30 to 45 seconds and uses Copilot premium requests.</li>
+        <li><strong>Your own provider.</strong> Click <strong>Add provider</strong> and start from a preset: OpenAI, Azure OpenAI (<code>https://&lt;resource&gt;.openai.azure.com/openai/v1</code>, model = deployment name), OpenRouter, Groq, or a local model through Ollama (<code>http://localhost:11434/v1</code>) or LM Studio. Enter the model and, for hosted services, an API key. <strong>Test</strong> checks it before you save. Keys are encrypted and only sent to that provider; plain <code>http://</code> is allowed only for this computer or your local network. Choose a model that supports <strong>tool calling</strong>.</li>
+      </ul>
+      <p>Custom providers can't browse the web, so pick a <strong>Web search</strong> service for them: <a href="https://brave.com/search/api/">Brave Search</a> or <a href="https://tavily.com">Tavily</a> (API key, both have free tiers), or your own <a href="https://docs.searxng.org">SearXNG</a> instance (free, enable <code>json</code> in <code>search.formats</code>). A built-in page reader refuses local and private addresses, and page content is treated as untrusted. Copilot uses its own search and fetcher, which gets past X and LinkedIn login walls more often, so verification works best with Copilot.</p>
+      <p>Searches run on demand, or automatically once per contact when you mention someone without an X or LinkedIn account. Turn off <em>Search automatically</em> or <em>Enabled</em> in the same card.</p>
+
+      <h4>GitHub Copilot: tokens and permissions</h4>
+      <ul>
+        <li>You need an active <strong>Copilot subscription</strong>. Searches are billed to it as premium requests. Organization or enterprise policies (SSO, IP allow lists, enabled models) still apply.</li>
+        <li>SocialPoster uses the first token it finds: the <em>GitHub token</em> saved in the card, then <code>GH_TOKEN</code>, then <code>GITHUB_TOKEN</code>, then (Windows only) your <code>copilot login</code>. A token in the card or environment replaces the CLI login.</li>
+        <li>Supported tokens: OAuth tokens from <code>copilot login</code> or <code>gh auth login</code> (<code>gho_</code>), GitHub App user tokens (<code>ghu_</code>) and <strong>fine-grained</strong> personal access tokens (<code>github_pat_</code>). <strong>Classic tokens (<code>ghp_</code>) don't work.</strong></li>
+        <li>To create a fine-grained token, open <a href="https://github.com/settings/personal-access-tokens/new">Fine-grained tokens</a>, set <em>Resource owner</em> to your <strong>personal account</strong> (not an organization), leave repository access at public repositories, and under <em>Permissions → Account</em> add <strong>Copilot Requests</strong>. No repository permissions are needed. Authorize it for SAML SSO organizations if required.</li>
+        <li><strong>Test connection</strong> lists the models your plan can use.</li>
+      </ul>
+
+      <h4>Your own provider: keys</h4>
+      <p>The agent only calls <code>/chat/completions</code> with tools, sending the key as a bearer token. Pick a model that supports <strong>tool calling</strong>.</p>
+      <table>
+        <tr><th>Provider</th><th>Key and settings</th></tr>
+        <tr><td>OpenAI</td><td>Key from <a href="https://platform.openai.com/api-keys">platform.openai.com/api-keys</a>; the project needs billing or credits. For a restricted key, set the top-level <em>Model capabilities</em> permission to <em>Request</em> (<em>Write</em> in older UI), not just its <em>Chat completions</em> sub-item.</td></tr>
+        <tr><td>Azure OpenAI</td><td>Deploy a tool-capable chat model, copy a key from <em>Keys and Endpoint</em>, use <code>https://&lt;resource&gt;.openai.azure.com/openai/v1</code> as the base URL and the <em>deployment name</em> as the model. API-key authentication must be enabled on the resource; Entra ID sign-in isn't supported.</td></tr>
+        <tr><td>OpenRouter</td><td>Key from <a href="https://openrouter.ai/keys">openrouter.ai/keys</a>. Choose a model with tools support; add credits or use a rate-limited free model.</td></tr>
+        <tr><td>Groq</td><td>Key from <a href="https://console.groq.com/keys">console.groq.com/keys</a>. Choose a model that supports tool use.</td></tr>
+        <tr><td>Ollama</td><td>No key. <code>ollama pull llama3.1</code> (or <code>qwen2.5</code>) and keep Ollama running. For another PC on your network, start it with <code>OLLAMA_HOST=0.0.0.0</code>.</td></tr>
+        <tr><td>LM Studio</td><td>No key. Load a tool-capable model and start the server on the <em>Developer</em> tab (port 1234); enable <em>Serve on Local Network</em> for other PCs.</td></tr>
+      </table>
+      <p>Plain <code>http://</code> works only for this computer or private network addresses.</p>
+
+      <h4>Web search service</h4>
+      <ul>
+        <li><strong>Brave Search:</strong> create an account at the <a href="https://api-dashboard.search.brave.com">Brave Search API dashboard</a>, activate the <em>Search</em> plan (a card is required; a monthly free credit is included) and create a key under <em>API Keys</em>.</li>
+        <li><strong>Tavily:</strong> sign up at <a href="https://app.tavily.com">app.tavily.com</a> and copy the <code>tvly-…</code> key. The free plan has 1,000 credits a month; each search uses one.</li>
+        <li><strong>SearXNG:</strong> use your own instance. Add <code>json</code> to <code>search.formats</code> in <code>settings.yml</code> (for example <code>formats: [html, json]</code>) and restart, or searches return 403. If its limiter is on, turn it off for a private instance or add this computer's IP to <code>pass_ip</code> in <code>limiter.toml</code>.</li>
       </ul>
     </section>
 
     <section id="using">
       <h2>Using the app</h2>
-      <h3 id="mentions">Writing and mentioning people</h3>
-      <p>Write your post and type <kbd>@</kbd> to find people. A mention is stored as a platform-neutral token such as <code>{@grace}</code> that points to a <em>contact</em>, which holds that person's identity on each platform. Each preview shows the result for that platform, with a character counter and any warnings.</p>
+      <h3 id="mentions">Writing, mentions and previews</h3>
+      <p>Write your post and type <kbd>@</kbd> to find people. A mention is stored as a platform-neutral token such as <code>{@grace}</code> that points to a <em>contact</em>, which holds that person's identity on each platform.</p>
       <table>
         <tr><th>Platform</th><th>What's posted</th><th>Needs</th></tr>
         <tr><td>X</td><td><code>@username</code></td><td>X username</td></tr>
         <tr><td>Bluesky</td><td><code>@handle</code> plus a real mention facet</td><td>Handle / DID</td></tr>
         <tr><td>LinkedIn</td><td><code>@[Name](urn:li:…)</code> in the post text</td><td>Exact LinkedIn name and URN</td></tr>
+        <tr><td>Mastodon</td><td><code>@user@server</code></td><td>Fully qualified acct</td></tr>
+        <tr><td>Threads</td><td><code>@username</code></td><td>Threads username</td></tr>
       </table>
-      <p>If a contact has no account on a platform, their plain name is used and the preview shows a warning. You can override the text for any platform with <em>Customize</em>.</p>
+      <p>If a contact has no account on a platform, their plain name is used and the preview shows a warning. Each platform has a card in the composer: switch <strong>Publish</strong> on or off, and click <strong>Edit</strong> to open its preview with the character count, warnings, <em>Copy text</em> and <em>Customize for …</em> to override the text for that platform.</p>
+      <figure><img src="img/compose-preview.png" alt="The Bluesky preview dialog showing rendered mentions, the shortened link and a character counter" loading="lazy"><figcaption>A platform preview</figcaption></figure>
       <ul>
         <li><strong>X</strong> counts emoji and CJK characters as 2, and every link as a fixed 23 characters.</li>
         <li><strong>Bluesky</strong> shortens links the way the official app does, stores the full URL as the link target, and attaches a link-preview card when the post contains a link.</li>
+        <li><strong>Mastodon</strong> and <strong>Threads</strong> count graphemes against 500 characters; Mastodon counts URLs as 23.</li>
         <li><strong>LinkedIn people</strong> can't be tagged by apps without partner access. After publishing, a <em>Tag by hand</em> checklist lists each person with a copy button and their profile link. Company pages with a numeric ID are tagged automatically.</li>
       </ul>
 
-      <h3 id="scheduling">Optional scheduling</h3>
-      <p>Scheduling is optional. Use <strong>Publish to ...</strong> in the composer to publish now, or choose a local date and time and click <strong>Schedule selected platforms</strong> to publish later. Scheduled posts use the selected platforms, text overrides and media. Timed delivery requires the app's scheduling worker to be running around the due time, and its data directory must remain available. X's browser-intent mode can't be scheduled because it requires you to finish publishing yourself.</p>
+      <h3 id="draft">Draft from a link</h3>
+      <p>Enter an article's URL in <strong>Draft from a link</strong> and click <strong>Generate</strong>. The account finder agent reads the page and writes shared text plus a linked, hashtagged customized draft for each selected platform. Use each platform's <em>Use shared text</em> or <em>Customize</em> control to switch versions, and check the character counts before publishing.</p>
+
+      <h3 id="scheduling">Scheduling</h3>
+      <p>Scheduling is optional. Use <strong>Publish to …</strong> to publish now, or choose a local date and time in <strong>Schedule a post</strong> and click <strong>Schedule selected platforms</strong>. Scheduled posts use the selected platforms, text overrides and media.</p>
+      <ul>
+        <li>Mentions are resolved and each platform's text is validated when you schedule. Media is copied into the data folder; credentials are read only when the post goes out.</li>
+        <li>Enter the time as shown on your clock and pick the time zone. Times skipped by a daylight-saving change are rejected; times that occur twice ask you to choose an offset.</li>
+        <li><strong>Scheduled posts</strong> lists every schedule with per-platform results. Until delivery starts you can <strong>Edit content</strong>, <strong>Reschedule</strong> or <strong>Cancel schedule</strong>.</li>
+        <li>The app must be running around the due time. Posts more than 24 hours overdue expire rather than publishing unexpectedly. Rate-limited attempts are retried; a timeout is marked <em>uncertain</em> and not retried, because the platform may already have the post.</li>
+        <li>X's browser mode can't be scheduled, because you finish publishing yourself. Deselect X to schedule the other platforms.</li>
+      </ul>
 
       <h3 id="media">Images, GIFs and video</h3>
-      <p>Drop files onto the <strong>Media</strong> area under the post box, or click to browse. Each platform's limits are checked live in its preview card, and you can switch a platform off to skip it. Add alt text to images for screen readers.</p>
+      <p>Drop files onto the <strong>Media</strong> area under the post box, or click to browse. Each platform's limits are checked live, and you can switch a platform off to skip it. Add alt text to images for screen readers.</p>
       <table>
         <tr><th>Platform</th><th>Images</th><th>GIFs</th><th>Video</th></tr>
         <tr><td><span class="platform p-li">in</span>LinkedIn</td><td>Up to 20 (JPG/PNG, 10 MB each)</td><td>1 (10 MB)</td><td>1 (MP4, 75 KB to 500 MB, 3 s to 30 min)</td></tr>
         <tr><td><span class="platform p-bsky">🦋</span>Bluesky</td><td>Up to 4 (JPG/PNG/WebP, under 1 MB each)</td><td>Not supported by Bluesky</td><td>1 (MP4/MOV/WebM, 100 MB, 3 min)</td></tr>
         <tr><td><span class="platform p-x">𝕏</span>X (API)</td><td>Up to 4 (JPG/PNG/WebP, 5 MB each)</td><td>1 (15 MB)</td><td>1 (MP4/MOV, 512 MB)</td></tr>
+        <tr><td><span class="platform p-masto">M</span>Mastodon</td><td>Up to 4 (JPG/PNG/WebP, 8 MB each)</td><td>1 (8 MB)</td><td>1 (MP4/WebM, 40 MB)</td></tr>
+        <tr><td><span class="platform p-threads">@</span>Threads</td><td colspan="3">Text only: the Threads API can't take uploaded media</td></tr>
       </table>
       <p>A post can have images <em>or</em> one GIF <em>or</em> one video, not a mix. X's browser composer can't receive files, so attach media there by hand.</p>
 
-      <h3 id="import">Importing your Bluesky contacts</h3>
-      <p>Instead of adding people one at a time, bring in everyone you follow on Bluesky.</p>
-      <ol class="steps">
-        <li>On <strong>Accounts</strong>, enter your Bluesky handle. An app password is only needed to publish, not to import.</li>
-        <li>On <strong>Contacts</strong>, click <strong>Sync Bluesky follows</strong>. The <strong>Handle Duplicates</strong> prompt offers <strong>Yes, review</strong>, <strong>Sync without handling</strong>, or <strong>Cancel</strong>. A running count is shown while it works.</li>
-        <li>When it finishes you'll see how many contacts were added and how many existing ones were refreshed. It's safe to run again: people are matched by their Bluesky account and never duplicated.</li>
-      </ol>
-      <p>Each imported contact gets a template key, name, avatar and Bluesky handle. Any unambiguous X or LinkedIn links in their bio can be picked up, and you can fill in the rest later by hand or with the Copilot finder. Large follow lists can take a minute.</p>
-      <p>The same <strong>Handle Duplicates</strong> experience applies to Bluesky, X and Mastodon follow syncs. Opting in pauses an incoming account before saving when identities or profile links conflict, or normalized names suggest a possible duplicate. Names are suggestions, never proof. Choose a saved contact, resolve every whole-platform identity collision in the manual merge review, and confirm; its keys, aliases, edited metadata, usage and history are preserved and discovery caches invalidated. Or keep the account separate, skip it, or cancel the remaining sync. Identity ownership and reviewed snapshots are rechecked before saving: an identity cannot be taken from a third contact, and concurrent contact changes require a fresh preview. No incoming contact is saved while awaiting review. Cancelling or leaving the page preserves completed imports but stops remaining work. Sync without handling retains the existing safe behavior; success appears only after all reviews finish. Close an open contact editor before syncing.</p>
+      <h3 id="import">Importing your follows</h3>
+      <p>Instead of adding people one at a time, bring in everyone you follow. The <strong>Contacts</strong> page offers a sync button for each enabled platform that supports it:</p>
+      <ul>
+        <li><strong>Sync Bluesky follows</strong> needs only your Bluesky handle, not an app password.</li>
+        <li><strong>Sync X follows</strong> needs all four X API credentials with <em>Post via browser instead</em> turned off, and uses your X API quota.</li>
+        <li><strong>Sync Mastodon follows</strong> imports the connected account's following list.</li>
+      </ul>
+      <p>Before syncing, the <strong>Handle Duplicates</strong> prompt offers <strong>Yes, review</strong>, <strong>Sync without handling</strong>, or <strong>Cancel</strong>. A running count is shown, and at the end you'll see how many contacts were added and refreshed. It's safe to run again: people are matched by stable platform IDs, handles and explicit profile links, never just by name.</p>
+      <p>If you choose to review, the sync pauses before saving an account whose identities or profile links conflict with a saved contact, or whose name suggests a possible duplicate. Pick the saved contact and merge them (resolving each platform's identity), keep the account separate, skip it, or cancel the remaining sync. Completed imports are kept if you cancel or leave the page. Close an open contact editor before syncing.</p>
 
       <h3 id="contacts">Managing contacts</h3>
-      <p>Every person you pick with <kbd>@</kbd> is saved automatically. The <strong>Contacts</strong> page lets you search by name, key or handle, filter by whether they have X or LinkedIn linked, sort (A to Z, most used, recently used or added), and edit or delete anyone. In the editor you can link accounts, verify them, and run the Copilot finder.</p>
+      <p>Every person you pick with <kbd>@</kbd> is saved automatically. The <strong>Contacts</strong> page lets you search by name, key or handle, show contacts linked to chosen platforms, sort (A to Z, most used, recently used or added), and edit or delete anyone. In the editor you can link accounts on each platform, verify them, and run the account finder.</p>
       <figure><img src="img/contact-edit.png" alt="Editing a contact: display name, template key and accounts on each platform" loading="lazy"><figcaption>Editing a contact</figcaption></figure>
+      <ul>
+        <li><strong>Handle conflicts</strong> scans for likely duplicates (same identities, profile links in bios, or similar names) and lets you review and merge them. Results are saved until you dismiss or rescan.</li>
+        <li><strong>Manual merge</strong> lets you tick any two contacts and merge them. The survivor keeps its key, and the other key keeps working in existing posts and drafts.</li>
+        <li><strong>Purge &lt;platform&gt;</strong> removes one platform's identities from all contacts and deletes contacts left with no accounts. History is kept. Maintenance can't be undone.</li>
+      </ul>
     </section>
 
     <section id="screenshots">
       <h2>Screenshots</h2>
       <div class="gallery">
-        <figure><img src="img/compose.png" alt="Compose page" loading="lazy"><figcaption>Compose</figcaption></figure>
+        <figure><img src="img/compose.png" alt="Compose page" loading="lazy"><figcaption>Compose and scheduling</figcaption></figure>
         <figure><img src="img/compose-dark.png" alt="Compose page in dark mode" loading="lazy"><figcaption>Dark mode (toggle in the top bar)</figcaption></figure>
         <figure><img src="img/contacts.png" alt="Contacts page" loading="lazy"><figcaption>Contacts</figcaption></figure>
         <figure><img src="img/history.png" alt="History page" loading="lazy"><figcaption>History</figcaption></figure>
@@ -213,9 +277,23 @@ dotnet run --launch-profile http</code></pre>
         <tr><td><code>SocialPoster:DataDirectory</code><br>(env <code>SocialPoster__DataDirectory</code>)</td><td><code>%LOCALAPPDATA%\SocialPoster</code> on Windows<br><code>~/.local/share/SocialPoster</code> on Linux<br><code>~/Library/Application Support/SocialPoster</code> on macOS</td></tr>
         <tr><td><code>SocialPoster:DatabaseFileName</code></td><td><code>socialposter.db</code> (file name within the data folder)</td></tr>
         <tr><td><code>SocialPoster:PostingTimeout</code></td><td><code>00:30:00</code> (allows large media uploads)</td></tr>
+        <tr><td><code>SocialPoster:Scheduling:PollInterval</code></td><td><code>00:00:15</code> (how often due posts are checked)</td></tr>
+        <tr><td><code>SocialPoster:Scheduling:MaxLateness</code></td><td><code>1.00:00:00</code> (older due posts expire)</td></tr>
+        <tr><td><code>SocialPoster:Scheduling:MaxAttempts</code> / <code>RetryDelay</code></td><td><code>3</code> / <code>00:05:00</code> (rate-limit retries)</td></tr>
       </table>
-      <p>The folder holds <code>socialposter.db</code> (SQLite) and <code>keys/</code> (the Data Protection key ring). Keep them together: the database can't be decrypted without <code>keys/</code>.</p>
-      <p>Embedding in another project? The implementation is packaged as <strong>SocialPoster.Core</strong> (services, data and models) and <strong>SocialPoster.Components</strong> (Blazor UI and assets). See the <a href="https://github.com/isaacrlevin/SocialPoster#embed-socialposter-in-your-own-project">README's package consumer guide</a> for registration, database initialization, routing, interactive server hosting and security responsibilities. The libraries retain the local single-user storage model; they do not add authentication or change the host's Data Protection identity.</p>
+      <p>The folder holds <code>socialposter.db</code> (SQLite), <code>keys/</code> (the Data Protection key ring) and <code>scheduled-media/</code> (attachments for scheduled posts). Keep them together: the database can't be decrypted without <code>keys/</code>.</p>
+    </section>
+
+    <section id="embed">
+      <h2>Packages and embedding</h2>
+      <p>SocialPoster is published to NuGet as three packages that share one version:</p>
+      <table>
+        <tr><th>Package</th><th>Use it for</th></tr>
+        <tr><td><a href="https://github.com/isaacrlevin/SocialPoster/blob/main/src/SocialPoster.Posting/README.md"><code>SocialPoster.Posting</code></a></td><td>Posting to all five platforms from any .NET app. No database, UI or ASP.NET: just <code>AddSocialPosting()</code>, an <code>ICredentialStore</code> and <code>SocialPublisher</code>.</td></tr>
+        <tr><td><code>SocialPoster.Core</code></td><td>The app backend: SQLite storage, encrypted settings, contacts, history, optional scheduling and the account finder agent.</td></tr>
+        <tr><td><code>SocialPoster.Components</code></td><td>The full Blazor UI, for an interactive server host.</td></tr>
+      </table>
+      <p>Scheduling is opt-in for hosts (<code>AddSocialPosterScheduling()</code> and <code>AddSocialPosterSchedulingWorker()</code>), with replaceable storage, media and credential adapters and a SQL Server store for shared deployments. See the <a href="https://github.com/isaacrlevin/SocialPoster#embed-socialposter-in-your-own-project">README's package consumer guide</a> for registration, database initialization, routing, scheduling and security responsibilities. The libraries retain the local single-user storage model; they do not add authentication or change the host's Data Protection identity.</p>
     </section>
 
     <section id="security">
@@ -225,16 +303,19 @@ dotnet run --launch-profile http</code></pre>
         <p>The app has no login. Anyone who can reach it can post as you, so keep it bound to <code>localhost</code> and don't expose it to a network or the internet.</p>
       </div>
       <ul>
-        <li>Credentials are encrypted with ASP.NET Core Data Protection. On Windows the key ring is protected with DPAPI. On Linux and macOS there's no OS-level key protection, so the keys rely on owner-only file permissions (the app sets the data folder to <code>700</code>). Treat the folder like an SSH key.</li>
+        <li>Credentials, including agent provider and web search API keys, are encrypted with ASP.NET Core Data Protection. On Windows the key ring is protected with DPAPI. On Linux and macOS there's no OS-level key protection, so the keys rely on owner-only file permissions (the app sets the data folder to <code>700</code>). Treat the folder like an SSH key.</li>
         <li>Use a Bluesky <strong>app password</strong>, never your main password.</li>
-        <li>Forgetting a LinkedIn token only removes the local copy; it doesn't revoke it at LinkedIn.</li>
+        <li>Forgetting a LinkedIn, Mastodon or Threads token only removes the local copy; it doesn't revoke it on the platform.</li>
+        <li>Mastodon and Threads tokens are only sent to their own hosts; those clients never follow redirects.</li>
       </ul>
     </section>
 
     <section id="limits">
       <h2>Limitations</h2>
       <ul>
-        <li>No threads. Media is limited to what each platform accepts, and Bluesky doesn't support GIFs.</li>
+        <li>No multi-post threads (reply chains). Media is limited to what each platform accepts: Bluesky doesn't support GIFs, and Threads is text only.</li>
+        <li>No OAuth sign-in flows. You paste tokens generated on each platform, and SocialPoster never refreshes them.</li>
+        <li>Scheduled posts only go out while the app (its scheduling worker) is running.</li>
         <li>LinkedIn people can't be tagged automatically unless you know their URN. The finder gets their profile URL and you tag them by hand after posting. Organization vanity lookup needs Community Management API access.</li>
         <li>X lookups and posts cost money depending on your plan, unless you use the free browser option, where you click Post yourself.</li>
         <li>Posting to a LinkedIn company page isn't supported; posts go from your personal account.</li>
@@ -260,8 +341,20 @@ dotnet run --launch-profile http</code></pre>
         <p>Bluesky images must be under 1 MB each and can't be mixed with video. GIFs aren't supported. Resize or compress the image and try again.</p>
       </details>
       <details>
-        <summary>The Copilot finder says it has no token</summary>
-        <p>Run <code>copilot login</code>, or set <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>, or paste a GitHub token under <em>Accounts → Copilot account finder</em>. On Linux and macOS the saved CLI login isn't read automatically.</p>
+        <summary>Mastodon or Threads won't save the token</summary>
+        <p><em>Save and verify</em> checks the token with the platform before saving. For Mastodon, use the HTTPS origin of your home instance (not a profile URL) and make sure the token has the four scopes listed above. For Threads, make sure your account accepted the tester invite and the token includes <code>threads_basic</code> and <code>threads_content_publish</code>.</p>
+      </details>
+      <details>
+        <summary>Threads says media isn't supported</summary>
+        <p>The Threads API only accepts media by public URL, so SocialPoster posts text only there. Remove the attachments, or switch Threads off for this post.</p>
+      </details>
+      <details>
+        <summary>A scheduled post didn't go out</summary>
+        <p>The app must be running when the post is due. Open <em>Scheduled posts</em> to see each platform's result: <em>expired</em> means it was more than 24 hours overdue; <em>uncertain</em> means the request timed out and it may have been posted, so check the platform before posting again.</p>
+      </details>
+      <details>
+        <summary>The account finder says it has no token, or finds nothing</summary>
+        <p>For Copilot, run <code>copilot login</code>, set <code>GH_TOKEN</code> / <code>GITHUB_TOKEN</code>, or paste a GitHub token under <em>Accounts → Account finder agent</em>. On Linux and macOS the saved CLI login isn't read automatically. If you get an authentication error with a token, make sure it's a fine-grained token with the <em>Copilot Requests</em> permission, not a classic <code>ghp_</code> token, and that a stray <code>GH_TOKEN</code> isn't overriding your login. For your own provider, make sure a web search service is configured and the model supports tool calling; small local models often don't. A 401 or 403 from the search service means the key is wrong; from SearXNG it usually means JSON output isn't enabled.</p>
       </details>
       <details>
         <summary>My credentials disappeared after moving the data folder</summary>

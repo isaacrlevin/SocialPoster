@@ -31,10 +31,29 @@ jobs:
       id-token: write # required for NuGet Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so we can diff against the previous release
+      # Only publish when something under src/ changed since the previous v* tag.
+      - name: Check for src changes
+        id: changes
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -z "$prev" ]; then
+            echo "No previous release tag found; publishing."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$prev" "$GITHUB_SHA" -- src; then
+            echo "No changes under src/ since $prev; skipping publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "src/ changed since $prev; publishing."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-dotnet@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           dotnet-version: 10.0.x
       - name: Pack
+        if: steps.changes.outputs.changed == 'true'
         run: |
           dotnet pack src/SocialPoster.Posting/SocialPoster.Posting.csproj --configuration Release --output artifacts
           dotnet pack src/SocialPoster.Core/SocialPoster.Core.csproj --configuration Release --output artifacts
@@ -42,8 +61,10 @@ jobs:
       # Exchanges the workflow's OIDC token for a short-lived NuGet API key (Trusted Publishing).
       - name: NuGet login
         id: nuget-login
+        if: steps.changes.outputs.changed == 'true'
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
       - name: Push to NuGet
+        if: steps.changes.outputs.changed == 'true'
         run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

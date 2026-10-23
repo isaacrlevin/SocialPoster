@@ -101,8 +101,11 @@ h1:focus { outline: none; }
 .platform-linkedin { border-top: 3px solid #0a66c2 !important; }
 .platform-mastodon .platform-icon { background: #6364ff; }
 .platform-mastodon { border-top: 3px solid #6364ff !important; }
-.mud-theme-dark .platform-x .platform-icon, .mud-theme-dark.platform-x .platform-icon { background: #2b2b2b; border: 1px solid #555; }
-.mud-theme-dark .platform-x { border-top-color: #bbb !important; }
+.platform-threads .platform-icon { background: #000; }
+.platform-threads { border-top: 3px solid #000 !important; }
+.mud-theme-dark .platform-x .platform-icon, .mud-theme-dark.platform-x .platform-icon,
+.mud-theme-dark .platform-threads .platform-icon, .mud-theme-dark.platform-threads .platform-icon { background: #2b2b2b; border: 1px solid #555; }
+.mud-theme-dark .platform-x, .mud-theme-dark .platform-threads { border-top-color: #bbb !important; }
 
 .preview {
     white-space: pre-wrap; overflow-wrap: anywhere; background: var(--mud-palette-background-gray);
