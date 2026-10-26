@@ -13,7 +13,7 @@
     <div class="sp-card-body">
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
             An AI agent searches the web for people's @PlatformNames accounts so you can pick the right one, and can verify accounts and draft posts from a link.
-            Use your GitHub Copilot subscription, or add any OpenAI-compatible provider: OpenAI, Azure OpenAI, OpenRouter, Groq, or a local model through Ollama or LM Studio.
+            Use your GitHub Copilot subscription, or add Microsoft Foundry or any OpenAI-compatible provider: OpenAI, OpenRouter, Groq, or a local model through Ollama or LM Studio.
         </MudText>
 
         <MudGrid Spacing="3">
@@ -45,7 +45,7 @@
                 }
                 else
                 {
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uses @activeProvider.Name with model <code>@activeProvider.Model</code>. Requests go to <code>@HostOf(activeProvider.BaseUrl)</code> and use your own quota there.</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Uses @activeProvider.Name with @(AgentSettingsStore.FoundryHost(activeProvider.BaseUrl) is null ? "model" : "deployment") <code>@activeProvider.Model</code>. Requests go to <code>@HostOf(activeProvider.BaseUrl)</code> and use your own quota there.</MudText>
                 }
             </MudItem>
         </MudGrid>
@@ -113,16 +113,16 @@
                         <MudTextField T="string" Immediate="true" @bind-Value="editName" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
                     <MudItem xs="12" md="6">
-                        <MudTextField T="string" Immediate="true" @bind-Value="editModel" Label="Model or deployment name" Placeholder="@ModelPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTextField T="string" Immediate="true" @bind-Value="editModel" Label="@FormPreset.ModelLabel" Placeholder="@ModelPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense" />
                     </MudItem>
                     <MudItem xs="12" md="7">
-                        <MudTextField T="string" Immediate="true" @bind-Value="editUrl" Label="Base URL" Placeholder="https://api.openai.com/v1" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      HelperText="The API root that serves /chat/completions. Plain http is only allowed for this computer or your local network." />
+                        <MudTextField T="string" Immediate="true" @bind-Value="editUrl" Label="@FormPreset.UrlLabel" Placeholder="@FormPreset.UrlPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      HelperText="@(IsFoundryForm ? "Any endpoint URL from the Foundry portal; SocialPoster uses its /openai/v1 API." : "The API root that serves /chat/completions. Plain http is only allowed for this computer or your local network.")" />
                     </MudItem>
                     <MudItem xs="12" md="5">
                         <MudTextField T="string" Immediate="true" @bind-Value="editKey" Label="API key" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      Placeholder="@(editHasKey ? "•••• saved (leave blank to keep)" : "Leave blank for local servers")"
-                                      HelperText="Stored encrypted on this computer and only sent to the Base URL." />
+                                      Placeholder="@(editHasKey ? "•••• saved (leave blank to keep)" : IsFoundryForm ? "Key 1 or Key 2" : "Leave blank for local servers")"
+                                      HelperText="@($"Stored encrypted on this computer and only sent to the {FormPreset.UrlLabel.ToLowerInvariant()}.")" />
                     </MudItem>
                 </MudGrid>
                 <Feedback Text="@providerMsg" IsError="@providerErr" />
@@ -217,7 +217,12 @@
     private bool searchHasKey;
 
     private AgentProvider? activeProvider => providers.FirstOrDefault(p => p.Id == activeId);
-    private string ModelPlaceholder => AgentProviderPresets.All.FirstOrDefault(p => p.Name == presetName)?.ModelExample is { Length: > 0 } m ? m : "gpt-4o-mini";
+    private bool IsFoundryForm => presetName == AgentProviderPresets.FoundryName || AgentSettingsStore.FoundryHost(editUrl) is not null;
+
+    /// <summary>Supplies the form's labels: Foundry's own wording for Foundry endpoints, generic wording otherwise.</summary>
+    private AgentProviderPreset FormPreset => IsFoundryForm ? AgentProviderPresets.Foundry : AgentProviderPresets.All[^1];
+
+    private string ModelPlaceholder => (IsFoundryForm ? AgentProviderPresets.Foundry : AgentProviderPresets.All.FirstOrDefault(p => p.Name == presetName))?.ModelExample is { Length: > 0 } m ? m : "gpt-4o-mini";
 
     private bool IsReady => enabled && (activeProvider is null ? cpOk == true : search.Kind != SearchKind.None);
 

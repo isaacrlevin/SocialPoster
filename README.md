@@ -312,7 +312,7 @@ matches for you to pick from.
 
 Under Accounts → **Account finder agent**, pick the agent from the chips: **GitHub Copilot** (the default) or any
 provider you add with **Add provider**. A provider is any server that speaks the OpenAI chat completions API, so one form
-covers OpenAI, Azure OpenAI (`https://<resource>.openai.azure.com/openai/v1`, model = deployment name), OpenRouter, Groq,
+covers OpenAI, Microsoft Foundry (endpoint, key and deployment name), OpenRouter, Groq,
 and local models through Ollama (`http://localhost:11434/v1`) or LM Studio. Presets fill in the base URL; you enter the
 model and, for hosted services, an API key. **Test** sends a one-word request (and one search) to check everything before
 you save. You can save several providers and switch between them. API keys are stored encrypted like other credentials
@@ -364,7 +364,7 @@ to a model that supports **tool (function) calling**. SocialPoster sends the key
 | Provider               | Where to get the key                                                                 | Notes |
 |------------------------|--------------------------------------------------------------------------------------|-------|
 | **OpenAI**             | [platform.openai.com/api-keys](https://platform.openai.com/api-keys)                  | The project needs billing or credits. For a *Restricted* key, set the top-level **Model capabilities** permission to *Request* (*Write* in older UI). Enabling only its *Chat completions* sub-item can leave out the `model.request` scope and fail with "Missing scopes". |
-| **Azure OpenAI**       | Your resource's **Keys and Endpoint** page in the Azure portal or Foundry             | Deploy a tool-capable chat model first. Base URL `https://<resource>.openai.azure.com/openai/v1` (no `api-version`), and **Model** = the *deployment name*. Only API keys are supported, so key-based authentication must not be disabled on the resource; Microsoft Entra ID sign-in isn't available. |
+| **Microsoft Foundry**  | Your Foundry or Azure OpenAI resource's **Keys and Endpoint** page                   | Deploy a tool-capable chat model first, then enter just the **Endpoint**, **key** and **Deployment name**. Any endpoint the portal shows works (`https://<resource>.services.ai.azure.com`, `https://<resource>.openai.azure.com`, a project endpoint, or a deployment's target URI, which also fills in the deployment name); SocialPoster turns it into the resource's `/openai/v1` URL. Only API keys are supported, so key-based authentication must not be disabled on the resource; Microsoft Entra ID sign-in isn't available. |
 | **OpenRouter**         | [openrouter.ai/keys](https://openrouter.ai/keys)                                      | Pick a model that lists *tools* support. Add credits, or use a free model (they're rate limited). You can set a credit limit on the key. |
 | **Groq**               | [console.groq.com/keys](https://console.groq.com/keys)                                | Use a model Groq lists as supporting tool use. Free usage is rate limited. |
 | **Ollama** (local)     | No key                                                                                | `ollama pull llama3.1` (or another tool-capable model such as `qwen2.5`) and keep Ollama running. On another PC on your network, start it with `OLLAMA_HOST=0.0.0.0` and use `http://<that-pc>:11434/v1`. |

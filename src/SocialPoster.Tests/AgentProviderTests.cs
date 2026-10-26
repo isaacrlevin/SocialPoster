@@ -141,6 +141,28 @@ public class AgentSettingsStoreTests
         Assert.Equal(AgentSettingsStore.CopilotId, await store.GetActiveIdAsync());
     }
 
+    [Theory]
+    [InlineData("https://my-res.services.ai.azure.com", "gpt-4.1", "https://my-res.services.ai.azure.com/openai/v1", "gpt-4.1")]
+    [InlineData("https://my-res.services.ai.azure.com/api/projects/proj1", "gpt-4.1", "https://my-res.services.ai.azure.com/openai/v1", "gpt-4.1")]
+    [InlineData("https://My-Res.openai.azure.com/", "dep", "https://my-res.openai.azure.com/openai/v1", "dep")]
+    [InlineData("https://my-res.cognitiveservices.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview", "", "https://my-res.cognitiveservices.azure.com/openai/v1", "gpt-4o-mini")]
+    [InlineData("https://my-res.openai.azure.com/openai/deployments/a/chat/completions?api-version=1", "typed", "https://my-res.openai.azure.com/openai/v1", "typed")]
+    public void Foundry_endpoints_become_the_v1_api_and_fill_the_deployment(string url, string model, string expectedUrl, string expectedModel)
+    {
+        var p = AgentSettingsStore.Normalize(Provider("Foundry", url, "key", model));
+        Assert.Equal(expectedUrl, p.BaseUrl);
+        Assert.Equal(expectedModel, p.Model);
+        Assert.Null(AgentSettingsStore.Validate(p));
+    }
+
+    [Fact]
+    public void Foundry_needs_a_key_and_other_urls_are_untouched()
+    {
+        Assert.NotNull(AgentSettingsStore.Validate(Provider("Foundry", "https://my-res.services.ai.azure.com", null, "dep")));
+        Assert.Equal("https://api.openai.com/v1", AgentSettingsStore.Normalize(Provider("O", "https://api.openai.com/v1/")).BaseUrl);
+        Assert.Null(AgentSettingsStore.FoundryHost("https://evil.example.com/x.openai.azure.com"));
+    }
+
     [Fact]
     public void Presets_are_valid_starting_points_except_the_blank_ones()
     {
@@ -585,5 +607,51 @@ public class AgentSettingsCardTests
     {
         await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
         Assert.DoesNotContain("Account finder agent", await host.RenderAsync<Settings>([Platform.Bluesky, Platform.Mastodon]));
+    }
+}
+
+public class GeneratedPostCheckTests
+{
+    private static readonly Uri Source = new("https://example.com/post");
+
+    [Fact]
+    public void Over_limit_and_missing_drafts_are_reported_with_counts()
+    {
+        var link = Source.ToString();
+        var (posts, problems) = AccountFinder.CheckPosts(
+            [new("Shared", $"Short {link}"), new("Threads", new string('a', 520) + " " + link)],
+            [Platform.Bluesky, Platform.Threads], Source);
+
+        Assert.Equal(2, posts.Count);
+        Assert.Contains(problems, p => p.Contains("Threads post is") && p.Contains("500-character limit"));
+        Assert.Contains(problems, p => p == "Missing posts for: Bluesky.");
+    }
+
+    [Fact]
+    public void Length_budgets_account_for_how_each_platform_counts_the_link()
+    {
+        var uri = new Uri("https://duendesoftware.com/blog/are-csharp-and-dotnet-worth-learning-in-2026");
+        // Threads counts the whole 76-character URL; X always counts 23.
+        Assert.True(AccountFinder.TargetLength(Platform.Threads, uri) < 500 - 76);
+        Assert.True(AccountFinder.TargetLength(Platform.X, uri) < 280 - 23);
+        Assert.Contains("uses 76", AccountFinder.LengthGuide(Platform.Threads, uri));
+        Assert.Contains("uses 23", AccountFinder.LengthGuide(Platform.X, uri));
+        foreach (var platform in Enum.GetValues<Platform>())
+        {
+            var text = new string('a', AccountFinder.TargetLength(platform, uri)) + " " + uri;
+            Assert.False(SocialPoster.Posting.PostRenderer.Render(platform, text, _ => null).IsOverLimit);
+        }
+    }
+
+    [Fact]
+    public void Valid_drafts_have_no_problems()
+    {
+        var link = Source.ToString();
+        var (posts, problems) = AccountFinder.CheckPosts(
+            [new("Shared", $"Shared {link}"), new("threads", $"Threads {link}"), new("Bluesky", $"Sky {link}")],
+            [Platform.Bluesky, Platform.Threads], Source);
+
+        Assert.Equal(3, posts.Count);
+        Assert.Empty(problems);
     }
 }

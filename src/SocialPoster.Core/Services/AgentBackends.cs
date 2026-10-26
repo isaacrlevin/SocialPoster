@@ -319,8 +319,9 @@ internal sealed class ChatAgentBackend : IAgentBackend
                 c.FunctionInvoker = async (context, token) =>
                 {
                     var result = await context.Function.InvokeAsync(context.Arguments, token);
-                    // The answer is in; don't pay for another model round trip just to hear "done".
-                    if (context.Function.Name == task.Report.Name) context.Terminate = true;
+                    // The answer is in; don't pay for another model round trip just to hear "done". A report the
+                    // function rejected (e.g. an over-limit draft) leaves Reported incomplete so the model can retry.
+                    if (context.Function.Name == task.Report.Name && task.Reported.IsCompleted) context.Terminate = true;
                     return result;
                 };
             })

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SocialPoster.Core.Services;
 
@@ -36,10 +37,17 @@ public sealed record SearchSettings(SearchKind Kind, string? Endpoint = null, st
 }
 
 /// <summary>Starting points for common OpenAI-compatible services; users can edit every field afterwards.</summary>
-public sealed record AgentProviderPreset(string Name, string BaseUrl, string ModelExample, bool NeedsApiKey, string Hint);
+/// <param name="UrlLabel">What the service calls its base URL, so the form matches the user's portal.</param>
+/// <param name="ModelLabel">What the service calls the model, e.g. a deployment name.</param>
+public sealed record AgentProviderPreset(string Name, string BaseUrl, string ModelExample, bool NeedsApiKey, string Hint,
+    string UrlLabel = "Base URL", string ModelLabel = "Model or deployment name", string UrlPlaceholder = "https://api.openai.com/v1");
 
 public static class AgentProviderPresets
 {
+    public const string FoundryName = "Microsoft Foundry";
+
+    public static AgentProviderPreset Foundry => All.First(p => p.Name == FoundryName);
+
     public static readonly IReadOnlyList<AgentProviderPreset> All =
     [
         new("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini", true, "Needs an API key from platform.openai.com."),
@@ -48,8 +56,9 @@ public static class AgentProviderPresets
         new("LM Studio (local)", "http://localhost:1234/v1", "", false, "Start the local server in LM Studio and load a tool-capable model."),
         new("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", true, "One key for many hosted models."),
         new("Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", true, "Fast hosted open models."),
-        new("Azure OpenAI", "https://YOUR-RESOURCE.openai.azure.com/openai/v1", "your-deployment-name", true,
-            "Use your resource's /openai/v1 URL and the deployment name as the model."),
+        new(FoundryName, "", "your-deployment-name", true,
+            "Paste the endpoint from your Foundry or Azure OpenAI resource (a project endpoint or a deployment's target URI works too), its key, and the deployment name.",
+            "Endpoint", "Deployment name", "https://YOUR-RESOURCE.services.ai.azure.com"),
         new("Custom", "", "", false, "Any server that speaks the OpenAI chat completions API."),
     ];
 }
@@ -166,14 +175,38 @@ public sealed class AgentSettingsStore(SecretStore secrets)
         return search;
     }
 
-    public static AgentProvider Normalize(AgentProvider p) => p with
+    public static AgentProvider Normalize(AgentProvider p)
     {
-        Id = p.Id?.Trim() ?? "",
-        Name = p.Name?.Trim() ?? "",
-        BaseUrl = (p.BaseUrl?.Trim() ?? "").TrimEnd('/'),
-        ApiKey = string.IsNullOrWhiteSpace(p.ApiKey) ? null : p.ApiKey.Trim(),
-        Model = p.Model?.Trim() ?? "",
-    };
+        var url = (p.BaseUrl?.Trim() ?? "").TrimEnd('/');
+        var model = p.Model?.Trim() ?? "";
+        if (FoundryHost(url) is { } host)
+        {
+            // Foundry shows several URL shapes (resource, project, a deployment's target URI with ?api-version);
+            // all of them are served by the resource's OpenAI-compatible v1 API, which takes the deployment as the model.
+            if (model.Length == 0 && Regex.Match(url, "/deployments/([^/?#]+)") is { Success: true } m)
+                model = Uri.UnescapeDataString(m.Groups[1].Value);
+            url = $"https://{host}/openai/v1";
+        }
+
+        return p with
+        {
+            Id = p.Id?.Trim() ?? "",
+            Name = p.Name?.Trim() ?? "",
+            BaseUrl = url,
+            ApiKey = string.IsNullOrWhiteSpace(p.ApiKey) ? null : p.ApiKey.Trim(),
+            Model = model,
+        };
+    }
+
+    private static readonly string[] FoundryDomains =
+        [".services.ai.azure.com", ".openai.azure.com", ".cognitiveservices.azure.com"];
+
+    /// <summary>The host of a Microsoft Foundry / Azure OpenAI resource URL, or null for any other URL.</summary>
+    public static string? FoundryHost(string? url) =>
+        Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri) && uri.Scheme == "https" &&
+        FoundryDomains.Any(d => uri.Host.EndsWith(d, StringComparison.OrdinalIgnoreCase))
+            ? uri.Host.ToLowerInvariant()
+            : null;
 
     /// <returns>An error message, or null when the provider is usable.</returns>
     public static string? Validate(AgentProvider provider)
@@ -182,7 +215,9 @@ public sealed class AgentSettingsStore(SecretStore secrets)
         if (p.Name.Length == 0) return "Give the provider a name.";
         if (p.Name.Length > 60) return "Provider names are at most 60 characters.";
         if (p.Name.Equals("GitHub Copilot", StringComparison.OrdinalIgnoreCase)) return "That name is reserved for the built-in Copilot provider.";
-        if (p.Model.Length == 0) return "Enter the model (or deployment) name to use.";
+        var foundry = FoundryHost(p.BaseUrl) is not null;
+        if (p.Model.Length == 0) return foundry ? "Enter the deployment name." : "Enter the model (or deployment) name to use.";
+        if (foundry && p.ApiKey is null) return "Enter the key from your Foundry resource's Keys and Endpoint page.";
         if (p.ApiKey is not null && p.ApiKey.Any(ch => char.IsWhiteSpace(ch) || char.IsControl(ch)))
             return "API keys can't contain spaces or control characters.";
         return ValidateEndpoint(p.BaseUrl, "Base URL", p.ApiKey is not null);
