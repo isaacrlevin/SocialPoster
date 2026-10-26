@@ -487,7 +487,7 @@ For example, a .NET 10 Blazor Web App named `MyHost` uses:
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SocialPoster.Components" Version="0.5.1" />
+    <PackageReference Include="SocialPoster.Components" Version="0.6.0" />
   </ItemGroup>
 </Project>
 ```
@@ -869,14 +869,14 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ### Releasing
 
-All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.5.1`).
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.0`).
 
 - **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
   Components as `<version>-local.<timestamp>` into `~/.nuget-local` (`-FeedPath` to change it, `-Register` to add it as
   the `SocialPosterLocal` NuGet source, `-SkipTests` to skip tests).
 - **Check the release packages:** `scripts/publish-nuget.ps1` runs the tests and packs all three into `artifacts/`. It
   doesn't publish.
-- **Publish:** bump the version in all three projects, commit, and push a matching tag (for example `v0.5.1`). The CI
+- **Publish:** bump the version in all three projects, commit, and push a matching tag (for example `v0.6.0`). The CI
   `publish` job packs and pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
