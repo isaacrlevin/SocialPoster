@@ -5,7 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <IsPackable>true</IsPackable>
         <PackageId>SocialPoster.Components</PackageId>
-        <Version>0.6.0</Version>
+        <Version>0.6.1</Version>
         <Authors>Isaac Levin</Authors>
         <Description>Embeddable SocialPoster Blazor components and routed UI for interactive server hosts.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>

@@ -5,6 +5,33 @@ UI or ASP.NET required: it needs only `HttpClient` and a place to read your toke
 
 This is the posting engine behind [SocialPoster](https://github.com/isaacrlevin/SocialPoster), the desktop/Blazor app.
 
+## Install
+
+Requires .NET 10. Add the package with the .NET CLI:
+
+```bash
+dotnet add package SocialPoster.Posting
+```
+
+Or with the Package Manager Console in Visual Studio:
+
+```powershell
+Install-Package SocialPoster.Posting
+```
+
+Or add it to your `.csproj` directly:
+
+```xml
+<PackageReference Include="SocialPoster.Posting" Version="0.6.1" />
+```
+
+To build from source instead, clone [the repository](https://github.com/isaacrlevin/SocialPoster) and add a project
+reference:
+
+```bash
+dotnet add reference path/to/SocialPoster/src/SocialPoster.Posting/SocialPoster.Posting.csproj
+```
+
 ## Quick start
 
 ```csharp

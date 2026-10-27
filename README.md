@@ -10,7 +10,8 @@ provider) finds people's accounts and drafts posts from a link.
 
 **Just want to post?** The posting engine is its own package, [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md):
 publish to all five platforms from any .NET app with no database, UI or ASP.NET. `SocialPoster.Core` and the Blazor
-components build on it.
+components build on it. Install with `dotnet add package SocialPoster.Posting` (see
+[Installing the packages](#installing-the-packages)).
 
 | Package                                                     | What it is                                                         |
 |-------------------------------------------------------------|--------------------------------------------------------------------|
@@ -462,6 +463,33 @@ Three packable libraries contain the implementation, all published to NuGet with
   and MudBlazor, never on the sample Web project. Requires **Blazor interactive server** hosting: SQLite, protected
   credentials and the agent run on the server, not in WebAssembly.
 
+### Installing the packages
+
+Add the package you need from [nuget.org](https://www.nuget.org/packages?q=SocialPoster) with the .NET CLI. Each one
+brings in the packages below it, so add only one:
+
+```bash
+dotnet add package SocialPoster.Components   # full Blazor UI (includes Core and Posting)
+dotnet add package SocialPoster.Core         # backend only: storage, contacts, scheduling, agent (includes Posting)
+dotnet add package SocialPoster.Posting      # just the platform clients and publisher
+```
+
+Add `--version 0.6.1` to pin a version, or `--project path/to/MyHost.csproj` if you aren't in the project folder. In
+Visual Studio, use **Manage NuGet Packages** and search for `SocialPoster`, or the Package Manager Console:
+
+```powershell
+Install-Package SocialPoster.Components
+```
+
+To build against the source instead (for example a clone or git submodule), add a project reference:
+
+```bash
+dotnet add reference path/to/SocialPoster/src/SocialPoster.Components/SocialPoster.Components.csproj
+```
+
+Swap in `SocialPoster.Core/SocialPoster.Core.csproj` or `SocialPoster.Posting/SocialPoster.Posting.csproj` for the
+smaller packages. A project reference behaves the same as the package; your project must target .NET 10.
+
 ### Packages and backend registration
 
 Pack locally (these commands do not publish anything):
@@ -487,7 +515,7 @@ For example, a .NET 10 Blazor Web App named `MyHost` uses:
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SocialPoster.Components" Version="0.6.0" />
+    <PackageReference Include="SocialPoster.Components" Version="0.6.1" />
   </ItemGroup>
 </Project>
 ```
@@ -869,14 +897,15 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ### Releasing
 
-All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.0`).
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.1`).
 
 - **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
   Components as `<version>-local.<timestamp>` into `~/.nuget-local` (`-FeedPath` to change it, `-Register` to add it as
   the `SocialPosterLocal` NuGet source, `-SkipTests` to skip tests).
 - **Check the release packages:** `scripts/publish-nuget.ps1` runs the tests and packs all three into `artifacts/`. It
   doesn't publish.
-- **Publish:** bump the version in all three projects, commit, and push a matching tag (for example `v0.6.0`). The CI
+- **Publish:** bump the version in all three projects (and the version examples in this README, the Posting README and
+  `docs/index.html`), commit, and push a matching tag (for example `v0.6.1`). The CI
   `publish` job packs and pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing

@@ -293,6 +293,14 @@ dotnet run --launch-profile http</code></pre>
         <tr><td><code>SocialPoster.Core</code></td><td>The app backend: SQLite storage, encrypted settings, contacts, history, optional scheduling and the account finder agent.</td></tr>
         <tr><td><code>SocialPoster.Components</code></td><td>The full Blazor UI, for an interactive server host.</td></tr>
       </table>
+      <h3>Install</h3>
+      <p>Add one package with the .NET CLI. Each includes the ones below it, so <code>SocialPoster.Components</code> brings in Core and Posting:</p>
+<pre><code>dotnet add package SocialPoster.Components   # full Blazor UI
+dotnet add package SocialPoster.Core         # backend only
+dotnet add package SocialPoster.Posting      # just posting</code></pre>
+      <p>Add <code>--version 0.6.1</code> to pin a version. In Visual Studio, use <em>Manage NuGet Packages</em> and search for <code>SocialPoster</code>, or run <code>Install-Package SocialPoster.Components</code> in the Package Manager Console. To build against the source instead, clone the repository and add a project reference:</p>
+<pre><code>dotnet add reference path/to/SocialPoster/src/SocialPoster.Components/SocialPoster.Components.csproj</code></pre>
+      <p>Your project must target .NET 10.</p>
       <p>Scheduling is opt-in for hosts (<code>AddSocialPosterScheduling()</code> and <code>AddSocialPosterSchedulingWorker()</code>), with replaceable storage, media and credential adapters and a SQL Server store for shared deployments. See the <a href="https://github.com/isaacrlevin/SocialPoster#embed-socialposter-in-your-own-project">README's package consumer guide</a> for registration, database initialization, routing, scheduling and security responsibilities. The libraries retain the local single-user storage model; they do not add authentication or change the host's Data Protection identity.</p>
     </section>
 
