@@ -42,12 +42,12 @@
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.AutoAwesome"
                                OnClick="GenerateFromUrlAsync"
-                               Disabled="@(generatingPost || string.IsNullOrWhiteSpace(sourceUrl) || !Publishable.Any())">
+                               Disabled="@(generatingPost || string.IsNullOrWhiteSpace(sourceUrl) || !drafts.Any())">
                         @(generatingPost ? "Drafting…" : "Generate")
                     </MudButton>
                 </div>
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">Copilot reads the page and
-                    drafts a linked, hashtagged post for each selected platform.
+                    drafts a linked, hashtagged post sized for each platform below.
                 </MudText>
                 @if (generatingPost)
                 {
@@ -789,7 +789,9 @@
 
     private async Task GenerateFromUrlAsync()
     {
-        var targets = Publishable.Select(d => d.Platform).ToArray();
+        // Draft for every platform on the page, not just the ones publishing: the rest still show (and can copy)
+        // the shared text, which would otherwise only be sized for the publishing platforms.
+        var targets = drafts.Select(d => d.Platform).ToArray();
         if (targets.Length == 0) return;
 
         generatingPost = true;

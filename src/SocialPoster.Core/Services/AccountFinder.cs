@@ -207,6 +207,8 @@ public sealed class AccountFinder(
                     // Models can't count characters reliably, so check here and let the model fix its own drafts
                     // rather than failing the whole generation over one long post.
                     var (_, problems) = CheckPosts(posts, platforms, uri);
+                    logger.LogDebug("report_posts attempt {Attempt} for {Url}: {Json} Problems: {Problems}", attempts + 1, uri,
+                        System.Text.Json.JsonSerializer.Serialize(posts), problems);
                     if (problems.Count > 0 && ++attempts < MaxPostAttempts)
                         return "Not recorded. Fix these problems and call report_posts again with every post:\n- " +
                                string.Join("\n- ", problems);
