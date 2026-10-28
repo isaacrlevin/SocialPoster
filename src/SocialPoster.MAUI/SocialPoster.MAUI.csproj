@@ -3,7 +3,8 @@
     <PropertyGroup>
         <!-- Desktop only: Windows when building on Windows, Mac Catalyst when building on macOS. -->
         <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst</TargetFrameworks>
+        <!-- MacCatalystSdkVersion (for example 26.0) builds against an older SDK pack when Xcode is behind the newest one. -->
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst$(MacCatalystSdkVersion)</TargetFrameworks>
         <IsMauiPlatform Condition="'$(TargetFrameworks)' != ''">true</IsMauiPlatform>
 
         <OutputType>Exe</OutputType>
