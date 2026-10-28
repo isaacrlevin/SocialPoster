@@ -154,6 +154,8 @@ internal sealed class CopilotAgentBackend(
             var client = new CopilotClient(new CopilotClientOptions
             {
                 GitHubToken = string.IsNullOrWhiteSpace(token) ? null : token,
+                Connection = RuntimeConnection.ForStdio(
+                    path: Environment.GetEnvironmentVariable("COPILOT_CLI_PATH")),
             });
             try
             {
