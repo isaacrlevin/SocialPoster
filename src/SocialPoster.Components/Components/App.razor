@@ -7,11 +7,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="@Navigation.BaseUri" />
-    <ResourcePreloader />
+    @if (ResourcePreloaderType is not null) { <DynamicComponent Type="ResourcePreloaderType" /> }
     <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
     <link rel="stylesheet" href="@Assets["_content/SocialPoster.Components/app.css"]" />
     <link rel="stylesheet" href="@Assets["_content/SocialPoster.Components/SocialPoster.Components.bundle.scp.css"]" />
-    <ImportMap />
+    @if (ImportMapType is not null) { <DynamicComponent Type="ImportMapType" /> }
     <link rel="icon" type="image/png" href="_content/SocialPoster.Components/favicon.png" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
@@ -29,6 +29,13 @@
 </html>
 
 @code {
+    // This document is only used by ASP.NET Core server hosts, but the library references the Components package
+    // (not the server framework) so it also runs in MAUI. These server-only components are found at runtime.
+    private static readonly Type? ResourcePreloaderType = Type.GetType(
+        "Microsoft.AspNetCore.Components.ResourcePreloader, Microsoft.AspNetCore.Components.Endpoints");
+    private static readonly Type? ImportMapType = Type.GetType(
+        "Microsoft.AspNetCore.Components.ImportMap, Microsoft.AspNetCore.Components.Endpoints");
+
     /// <summary>Route assembly for the full-document sample shell.</summary>
     [Parameter] public Assembly AppAssembly { get; set; } = typeof(Routes).Assembly;
 

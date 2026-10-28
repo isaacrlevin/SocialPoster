@@ -4,7 +4,8 @@ Write one post and publish it to **X**, **Bluesky**, **LinkedIn**, **Mastodon** 
 for each platform.
 
 A reusable .NET 10 backend and Blazor Razor Class Library with SQLite storage and a [MudBlazor](https://mudblazor.com)
-UI (light and dark themes, toggle in the top bar). The included Web project is a thin, local single-user sample host.
+UI (light and dark themes, toggle in the top bar). The included Web project is a thin, local single-user sample host,
+and the MAUI project runs the same app as a desktop window on Windows and macOS.
 Posts can go out now or be scheduled for later, and an optional AI agent (GitHub Copilot or any OpenAI-compatible
 provider) finds people's accounts and drafts posts from a link.
 
@@ -12,6 +13,10 @@ provider) finds people's accounts and drafts posts from a link.
 publish to all five platforms from any .NET app with no database, UI or ASP.NET. `SocialPoster.Core` and the Blazor
 components build on it. Install with `dotnet add package SocialPoster.Posting` (see
 [Installing the packages](#installing-the-packages)).
+
+**Prefer a desktop app?** [`SocialPoster.MAUI`](src/SocialPoster.MAUI) runs the full app in its own window on Windows
+and macOS, with no browser or local web server, and shares its data with the Web sample (see
+[Run it as a desktop app](#run-it-as-a-desktop-app-windows-and-macos)).
 
 | Package                                                     | What it is                                                         |
 |-------------------------------------------------------------|--------------------------------------------------------------------|
@@ -403,6 +408,8 @@ profile at all. Confirm the result against the profile link before relying on it
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git
+- For the desktop app only: the .NET MAUI workload (`maui-windows` on Windows, or `maui-maccatalyst` plus Xcode on
+  macOS)
 - Optional: the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli) (or a GitHub
   token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder. Nothing else is
   required to try the app: Bluesky search and "Copy text" work without any account.
@@ -415,12 +422,52 @@ cd SocialPoster/src/SocialPoster.Web
 dotnet run --launch-profile http    # http://localhost:5184
 ```
 
+Your browser opens to the app once it's listening (set `SocialPoster:LaunchBrowser` to `false` to turn this off).
+
 Works on Windows, Linux and macOS. The database is created automatically on first run; there is no migration or setup
 step. Then open **Accounts** to choose your platforms and connect the ones you want to post to
 (see [Connecting accounts](#connecting-accounts)). The sample runs the scheduling worker, so scheduled posts go out
 while it is running.
 
 Run the tests from the `src` folder with `dotnet test`.
+
+### Run it as a desktop app (Windows and macOS)
+
+`SocialPoster.MAUI` is a .NET MAUI Blazor Hybrid app that hosts the same UI in its own window, with no browser or local
+web server. It needs the MAUI workload (once):
+
+```bash
+dotnet workload install maui-windows      # on Windows
+dotnet workload install maui-maccatalyst  # on macOS (also needs Xcode)
+
+cd SocialPoster/src/SocialPoster.MAUI
+dotnet run
+```
+
+Or open `src/SocialPoster.slnx` in Visual Studio, Rider or VS Code and start `SocialPoster.MAUI`. On Windows it runs as
+an unpackaged desktop app; on macOS it is a Mac Catalyst app. If the build says the installed Xcode is too old for
+the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for example
+`dotnet run -p:MacCatalystSdkVersion=26.0` with Xcode 26.0 (each SDK pack needs its matching Xcode version).
+
+There are no prebuilt downloads yet, so build it from source as above.
+
+- **Requirements.** Windows 10 version 1809 or later, or macOS 12 or later on Intel or Apple silicon (the Mac build
+  includes both architectures).
+- **Shared data.** It uses the same data folder and key ring as the Web sample, so accounts, contacts, history and
+  scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
+  goes out once.
+- **Scheduling.** The app runs the scheduling worker while its window is open. Closing the window stops it, waiting up
+  to 10 seconds for a post that is already going out. Posts due while the app is closed go out the next time it (or the
+  Web sample) runs, unless they are more than 24 hours overdue (see [Scheduling posts](#scheduling-posts)).
+- **Account finder.** On Windows the Copilot CLI is included, as in the Web sample. On macOS, install it yourself
+  (below).
+- **Links and copying.** **View post**, profile links, X's browser composer and LinkedIn tagging open in your default
+  browser. **Copy text** uses the system clipboard.
+- **macOS.** The app isn't sandboxed (it shares `~/Library/Application Support/SocialPoster` with the Web sample and
+  starts the Copilot CLI for the account finder), so it can't be distributed through the Mac App Store as is. The Mac
+  app doesn't bundle the Copilot CLI: to use GitHub Copilot as the agent, install it (for example
+  `npm install -g @github/copilot`) and sign in with `copilot login`. The app finds it on `PATH` or in the usual
+  Homebrew/npm folders, or set `COPILOT_CLI_PATH`. Your own provider works without it.
 
 ### Configuration
 
@@ -432,6 +479,7 @@ The sample binds the `SocialPoster` configuration section to `SocialPosterOption
 | `SocialPoster:DataDirectory` (env: `SocialPoster__DataDirectory`) | `%LOCALAPPDATA%\SocialPoster` on Windows, `~/.local/share/SocialPoster` on Linux, `~/Library/Application Support/SocialPoster` on macOS | Holds `socialposter.db` (SQLite) and `keys/` (Data Protection key ring) |
 | `SocialPoster:DatabaseFileName`                                   | `socialposter.db`                                                                                                                       | File name inside the data directory; no directory separators            |
 | `SocialPoster:PostingTimeout`                                     | `00:30:00`                                                                                                                              | HTTP timeout for platform clients, including media uploads              |
+| `SocialPoster:LaunchBrowser` (env: `SocialPoster__LaunchBrowser`) | `true`                                                                                                                                  | Sample host only: open the browser at startup                           |
 
 Scheduling options bind from `SocialPoster:Scheduling` (env: `SocialPoster__Scheduling__PollInterval` and so on):
 
@@ -457,11 +505,13 @@ Three packable libraries contain the implementation, all published to NuGet with
   [own README](src/SocialPoster.Posting/README.md).
 - **SocialPoster.Core**: `SocialPoster.Core.Data.AppDbContext`, encrypted settings (`SecretStore`, which is the
   `ICredentialStore`), contact/publishing services, optional scheduling, and the account finder agent. Depends on
-  Posting and requires the ASP.NET Core shared framework, EF Core SQLite, Microsoft.Extensions.AI (OpenAI-compatible
-  providers) and GitHub.Copilot.SDK; it has no UI or Web dependency.
+  Posting and uses ASP.NET Core Data Protection, EF Core SQLite, Microsoft.Extensions.AI (OpenAI-compatible
+  providers) and GitHub.Copilot.SDK as NuGet packages (not the ASP.NET Core shared framework); it has no UI or Web
+  dependency.
 - **SocialPoster.Components**: all pages, layouts, shared components, theme, scripts and static assets. Depends on Core
-  and MudBlazor, never on the sample Web project. Requires **Blazor interactive server** hosting: SQLite, protected
-  credentials and the agent run on the server, not in WebAssembly.
+  and MudBlazor, never on the sample Web project. Runs in **Blazor interactive server** hosts or **.NET MAUI Blazor
+  Hybrid** apps (see `src/SocialPoster.MAUI`), where SQLite, protected credentials and the agent run in-process. Not
+  WebAssembly.
 
 ### Installing the packages
 
@@ -887,8 +937,10 @@ through the API.
 ## Contributing
 
 Issues and pull requests are welcome. Please run `dotnet build` and `dotnet test` from the `src` folder before
-submitting (CI runs both on Linux and Windows). Keep platform posting in `SocialPoster.Posting`, app services and
-storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web sample, with
+submitting (CI runs both on Linux and Windows, and builds the MAUI app on macOS). Building the whole solution on Windows
+or macOS needs the MAUI workload (see [Run it as a desktop app](#run-it-as-a-desktop-app-windows-and-macos)); on Linux
+`SocialPoster.MAUI` builds as an empty placeholder. Keep platform posting in `SocialPoster.Posting`, app services and
+storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web and MAUI hosts, with
 relevant tests.
 
 The setup guide site lives in `docs/` (screenshots come from `img/`) and is deployed by `.github/workflows/pages.yml`.
@@ -923,6 +975,7 @@ All three packages share one version, set by `<Version>` in each library `.cspro
   and backend registration/initialization (NuGet).
 - `src/SocialPoster.Components`: reusable Blazor UI, theme, styles/scripts/assets and UI registration (NuGet).
 - `src/SocialPoster.Web`: thin runnable sample, root-route wrappers, local key-ring and hosting policy.
+- `src/SocialPoster.MAUI`: the same app as a .NET MAUI Blazor Hybrid desktop app for Windows and macOS.
 - `src/SocialPoster.Tests`: xUnit tests.
 - `scripts/`: local packing scripts (see [Releasing](#releasing)).
 - `docs/`: the GitHub Pages setup guide.

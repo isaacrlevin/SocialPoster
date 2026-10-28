@@ -7,7 +7,7 @@
         <PackageId>SocialPoster.Components</PackageId>
         <Version>0.6.1</Version>
         <Authors>Isaac Levin</Authors>
-        <Description>Embeddable SocialPoster Blazor components and routed UI for interactive server hosts.</Description>
+        <Description>Embeddable SocialPoster Blazor components and routed UI for interactive server hosts and .NET MAUI Blazor Hybrid apps.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <RepositoryUrl>https://github.com/isaacrlevin/SocialPoster</RepositoryUrl>
@@ -15,7 +15,9 @@
         <PackageTags>social;blazor;components;socialposter</PackageTags>
     </PropertyGroup>
     <ItemGroup>
-        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+        <!-- A package rather than the Microsoft.AspNetCore.App framework, so the UI also runs in .NET MAUI
+             Blazor Hybrid hosts. Server-only document pieces are resolved at runtime (see App.razor). -->
+        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.13"/>
         <!-- Preserve Core's transitive Copilot SDK build assets for package consumers. -->
         <ProjectReference Include="..\SocialPoster.Core\SocialPoster.Core.csproj" PrivateAssets="none"/>
         <PackageReference Include="MudBlazor" Version="9.11.0"/>

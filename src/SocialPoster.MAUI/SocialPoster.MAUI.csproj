@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <!-- Desktop only: Windows when building on Windows, Mac Catalyst when building on macOS. -->
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+        <!-- MacCatalystSdkVersion (for example 26.0) builds against an older SDK pack when Xcode is behind the newest one. -->
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst$(MacCatalystSdkVersion)</TargetFrameworks>
+        <IsMauiPlatform Condition="'$(TargetFrameworks)' != ''">true</IsMauiPlatform>
+
+        <OutputType>Exe</OutputType>
+        <RootNamespace>SocialPoster.MAUI</RootNamespace>
+        <UseMaui>true</UseMaui>
+        <SingleProject>true</SingleProject>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <EnableDefaultCssItems>false</EnableDefaultCssItems>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+        <ApplicationTitle>SocialPoster</ApplicationTitle>
+        <ApplicationId>com.isaacrlevin.socialposter</ApplicationId>
+        <ApplicationDisplayVersion>0.6.1</ApplicationDisplayVersion>
+        <ApplicationVersion>1</ApplicationVersion>
+
+        <!-- Run unpackaged on Windows, like a normal desktop exe. See https://aka.ms/MauiTemplateUnpackaged -->
+        <WindowsPackageType>None</WindowsPackageType>
+
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+        <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+    </PropertyGroup>
+
+    <!-- Linux has no MAUI desktop target: build an empty placeholder so `dotnet build` of the solution still works. -->
+    <PropertyGroup Condition="'$(IsMauiPlatform)' != 'true'">
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Library</OutputType>
+        <UseMaui>false</UseMaui>
+        <EnableDefaultItems>false</EnableDefaultItems>
+        <EnableDefaultRazorComponentItems>false</EnableDefaultRazorComponentItems>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+        <!-- Both architectures so the app runs on Intel and Apple silicon Macs. -->
+        <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
+        <!-- EF Core, System.Text.Json and the agent use reflection, so keep every assembly intact in Release too. -->
+        <MtouchLink>None</MtouchLink>
+        <!-- The Copilot CLI is a Node bundle the Mac Catalyst app bundler can't package, so don't bundle it;
+             MauiProgram points the SDK at an installed `copilot` instead. -->
+        <CopilotSkipCliDownload>true</CopilotSkipCliDownload>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#5B5BF0" />
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5B5BF0" BaseSize="128,128" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
+        <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
+        <ProjectReference Include="..\SocialPoster.Components\SocialPoster.Components.csproj" />
+    </ItemGroup>
+
+    <!-- Components and Core also copy the CLI into their output, which flows into this app. Skip it there too. -->
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+        <ProjectReference Update="..\SocialPoster.Components\SocialPoster.Components.csproj" AdditionalProperties="CopilotSkipCliDownload=true" />
+    </ItemGroup>
+
+</Project>
