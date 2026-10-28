@@ -80,11 +80,17 @@
 <pre><code>git clone https://github.com/isaacrlevin/SocialPoster.git
 cd SocialPoster/src/SocialPoster.Web
 dotnet run --launch-profile http</code></pre>
-      <p>Open <a href="http://localhost:5184">http://localhost:5184</a>. The database is created automatically on first run, so there is no migration or setup step. The sample also runs the scheduling worker, so scheduled posts go out while it's running.</p>
+      <p>Your browser opens to <a href="http://localhost:5184">http://localhost:5184</a> once the app is listening (set <code>SocialPoster:LaunchBrowser</code> to <code>false</code> to turn this off). The database is created automatically on first run, so there is no migration or setup step. The sample also runs the scheduling worker, so scheduled posts go out while it's running.</p>
       <div class="note">
         <strong>Try it with nothing connected</strong>
         <p>Bluesky search and <em>Copy text</em> work without any account. Connect the platforms you want to publish to on the <em>Accounts</em> page.</p>
       </div>
+      <h3>Or run it as a desktop app</h3>
+      <p><code>SocialPoster.MAUI</code> hosts the same app in its own window on Windows and macOS, with no browser or local web server. Install the MAUI workload once (<code>maui-windows</code> on Windows, <code>maui-maccatalyst</code> on macOS, which also needs Xcode), then run it:</p>
+<pre><code>dotnet workload install maui-windows      # or maui-maccatalyst on macOS
+cd SocialPoster/src/SocialPoster.MAUI
+dotnet run</code></pre>
+      <p>It shares the Web sample's data folder, so accounts, contacts, history and scheduled posts are the same in both. Scheduled posts go out while its window is open, and links open in your default browser.</p>
       <p>To run the tests, use <code>dotnet test</code> from the <code>src</code> folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>.</p>
     </section>
 
@@ -277,6 +283,7 @@ dotnet run --launch-profile http</code></pre>
         <tr><td><code>SocialPoster:DataDirectory</code><br>(env <code>SocialPoster__DataDirectory</code>)</td><td><code>%LOCALAPPDATA%\SocialPoster</code> on Windows<br><code>~/.local/share/SocialPoster</code> on Linux<br><code>~/Library/Application Support/SocialPoster</code> on macOS</td></tr>
         <tr><td><code>SocialPoster:DatabaseFileName</code></td><td><code>socialposter.db</code> (file name within the data folder)</td></tr>
         <tr><td><code>SocialPoster:PostingTimeout</code></td><td><code>00:30:00</code> (allows large media uploads)</td></tr>
+        <tr><td><code>SocialPoster:LaunchBrowser</code></td><td><code>true</code> (open the browser at startup)</td></tr>
         <tr><td><code>SocialPoster:Scheduling:PollInterval</code></td><td><code>00:00:15</code> (how often due posts are checked)</td></tr>
         <tr><td><code>SocialPoster:Scheduling:MaxLateness</code></td><td><code>1.00:00:00</code> (older due posts expire)</td></tr>
         <tr><td><code>SocialPoster:Scheduling:MaxAttempts</code> / <code>RetryDelay</code></td><td><code>3</code> / <code>00:05:00</code> (rate-limit retries)</td></tr>
@@ -291,7 +298,7 @@ dotnet run --launch-profile http</code></pre>
         <tr><th>Package</th><th>Use it for</th></tr>
         <tr><td><a href="https://github.com/isaacrlevin/SocialPoster/blob/main/src/SocialPoster.Posting/README.md"><code>SocialPoster.Posting</code></a></td><td>Posting to all five platforms from any .NET app. No database, UI or ASP.NET: just <code>AddSocialPosting()</code>, an <code>ICredentialStore</code> and <code>SocialPublisher</code>.</td></tr>
         <tr><td><code>SocialPoster.Core</code></td><td>The app backend: SQLite storage, encrypted settings, contacts, history, optional scheduling and the account finder agent.</td></tr>
-        <tr><td><code>SocialPoster.Components</code></td><td>The full Blazor UI, for an interactive server host.</td></tr>
+        <tr><td><code>SocialPoster.Components</code></td><td>The full Blazor UI, for an interactive server host or a .NET MAUI Blazor Hybrid app.</td></tr>
       </table>
       <h3>Install</h3>
       <p>Add one package with the .NET CLI. Each includes the ones below it, so <code>SocialPoster.Components</code> brings in Core and Posting:</p>

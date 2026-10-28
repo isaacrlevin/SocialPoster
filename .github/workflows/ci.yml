@@ -17,9 +17,28 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # SocialPoster.MAUI builds for Windows here; on Linux it is an empty placeholder.
+      - name: Install MAUI workload
+        if: runner.os == 'Windows'
+        run: dotnet workload install maui-windows
       - run: dotnet build --configuration Release
         working-directory: src
       - run: dotnet test --configuration Release --no-build
+        working-directory: src
+
+  # Mac Catalyst can only be built on macOS.
+  maui-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: dotnet workload install maui-maccatalyst
+      - run: dotnet build SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
         working-directory: src
 
   publish:

@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using SocialPoster.Core;
 using SocialPoster.Components;
 using SocialPoster.Core.Scheduling;
@@ -37,4 +40,30 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<SocialPoster.Web.Components.App>().AddInteractiveServerRenderMode();
+
+// `dotnet run` ignores launchSettings' launchBrowser, so the sample opens the browser itself once it is listening.
+// Turn off with SocialPoster:LaunchBrowser=false (env: SocialPoster__LaunchBrowser=false).
+if (app.Configuration.GetValue("SocialPoster:LaunchBrowser", true))
+    app.Lifetime.ApplicationStarted.Register(() => OpenBrowser(app));
 app.Run();
+
+static void OpenBrowser(WebApplication app)
+{
+    var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses
+        .OrderByDescending(a => a.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        .FirstOrDefault();
+    if (address is null) return;
+
+    // Wildcard bindings (http://+:5000, http://0.0.0.0:5000, http://[::]:5000) aren't browsable; use localhost.
+    var uri = new UriBuilder(address.Replace("://+", "://localhost").Replace("://*", "://localhost"));
+    if (uri.Host is "0.0.0.0" or "[::]") uri.Host = "localhost";
+    var url = uri.Uri.ToString();
+    try
+    {
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not open a browser. Browse to {Url} manually.", url);
+    }
+}
