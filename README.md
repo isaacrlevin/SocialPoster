@@ -14,6 +14,10 @@ publish to all five platforms from any .NET app with no database, UI or ASP.NET.
 components build on it. Install with `dotnet add package SocialPoster.Posting` (see
 [Installing the packages](#installing-the-packages)).
 
+**Prefer a desktop app?** [`SocialPoster.MAUI`](src/SocialPoster.MAUI) runs the full app in its own window on Windows
+and macOS, with no browser or local web server, and shares its data with the Web sample (see
+[Run it as a desktop app](#run-it-as-a-desktop-app-windows-and-macos)).
+
 | Package                                                     | What it is                                                         |
 |-------------------------------------------------------------|--------------------------------------------------------------------|
 | [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md) | Platform clients, rendering, character counting and media rules   |
@@ -404,6 +408,8 @@ profile at all. Confirm the result against the profile link before relying on it
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git
+- For the desktop app only: the .NET MAUI workload (`maui-windows` on Windows, or `maui-maccatalyst` plus Xcode on
+  macOS)
 - Optional: the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli) (or a GitHub
   token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder. Nothing else is
   required to try the app: Bluesky search and "Copy text" work without any account.
@@ -443,10 +449,18 @@ an unpackaged desktop app; on macOS it is a Mac Catalyst app. If the build says 
 the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for example
 `dotnet run -p:MacCatalystSdkVersion=26.0` with Xcode 26.0 (each SDK pack needs its matching Xcode version).
 
+There are no prebuilt downloads yet, so build it from source as above.
+
+- **Requirements.** Windows 10 version 1809 or later, or macOS 12 or later on Intel or Apple silicon (the Mac build
+  includes both architectures).
 - **Shared data.** It uses the same data folder and key ring as the Web sample, so accounts, contacts, history and
   scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
   goes out once.
-- **Scheduling.** The app runs the scheduling worker while its window is open.
+- **Scheduling.** The app runs the scheduling worker while its window is open. Closing the window stops it, waiting up
+  to 10 seconds for a post that is already going out. Posts due while the app is closed go out the next time it (or the
+  Web sample) runs, unless they are more than 24 hours overdue (see [Scheduling posts](#scheduling-posts)).
+- **Account finder.** On Windows the Copilot CLI is included, as in the Web sample. On macOS, install it yourself
+  (below).
 - **Links and copying.** **View post**, profile links, X's browser composer and LinkedIn tagging open in your default
   browser. **Copy text** uses the system clipboard.
 - **macOS.** The app isn't sandboxed (it shares `~/Library/Application Support/SocialPoster` with the Web sample and
