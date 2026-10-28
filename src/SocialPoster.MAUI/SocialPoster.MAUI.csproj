@@ -44,6 +44,9 @@
         <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
         <!-- EF Core, System.Text.Json and the agent use reflection, so keep every assembly intact in Release too. -->
         <MtouchLink>None</MtouchLink>
+        <!-- The Copilot CLI is a Node bundle the Mac Catalyst app bundler can't package, so don't bundle it;
+             MauiProgram points the SDK at an installed `copilot` instead. -->
+        <CopilotSkipCliDownload>true</CopilotSkipCliDownload>
     </PropertyGroup>
 
     <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
@@ -56,6 +59,11 @@
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
         <ProjectReference Include="..\SocialPoster.Components\SocialPoster.Components.csproj" />
+    </ItemGroup>
+
+    <!-- Components and Core also copy the CLI into their output, which flows into this app. Skip it there too. -->
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
+        <ProjectReference Update="..\SocialPoster.Components\SocialPoster.Components.csproj" AdditionalProperties="CopilotSkipCliDownload=true" />
     </ItemGroup>
 
 </Project>

@@ -11,6 +11,8 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        if (OperatingSystem.IsMacCatalyst()) UseInstalledCopilotCli();
+
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp<App>();
 
@@ -55,6 +57,26 @@ public static class MauiProgram
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 "Library", "Application Support", "SocialPoster")
             : new SocialPosterOptions().DataDirectory;
+
+    // The Mac app doesn't bundle the Copilot CLI (see the csproj), so point the SDK at an installed one. Apps started
+    // from Finder get a minimal PATH, so look in the usual Homebrew/npm locations and add the CLI's folder to PATH
+    // (the npm launcher runs `node` from there). Without a CLI, the agent reports it couldn't start Copilot.
+    private static void UseInstalledCopilotCli()
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("COPILOT_CLI_PATH"))) return;
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string[] knownDirs = ["/opt/homebrew/bin", "/usr/local/bin", Path.Combine(home, ".local", "bin"),
+            Path.Combine(home, ".npm-global", "bin"), Path.Combine(home, ".volta", "bin")];
+        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries);
+        var cli = pathDirs.Concat(knownDirs).Select(dir => Path.Combine(dir, "copilot")).FirstOrDefault(File.Exists);
+        if (cli is null) return;
+
+        Environment.SetEnvironmentVariable("COPILOT_CLI_PATH", cli);
+        var cliDir = Path.GetDirectoryName(cli)!;
+        if (!pathDirs.Contains(cliDir))
+            Environment.SetEnvironmentVariable("PATH", string.Join(':', pathDirs.Prepend(cliDir)));
+    }
 
     private sealed class FixedApplicationDiscriminator(string discriminator) : IApplicationDiscriminator
     {

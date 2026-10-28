@@ -450,7 +450,10 @@ the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for examp
 - **Links and copying.** **View post**, profile links, X's browser composer and LinkedIn tagging open in your default
   browser. **Copy text** uses the system clipboard.
 - **macOS.** The app isn't sandboxed (it shares `~/Library/Application Support/SocialPoster` with the Web sample and
-  starts the Copilot CLI for the account finder), so it can't be distributed through the Mac App Store as is.
+  starts the Copilot CLI for the account finder), so it can't be distributed through the Mac App Store as is. The Mac
+  app doesn't bundle the Copilot CLI: to use GitHub Copilot as the agent, install it (for example
+  `npm install -g @github/copilot`) and sign in with `copilot login`. The app finds it on `PATH` or in the usual
+  Homebrew/npm folders, or set `COPILOT_CLI_PATH`. Your own provider works without it.
 
 ### Configuration
 
