@@ -38,7 +38,9 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: dotnet workload install maui-maccatalyst
-      - run: dotnet build SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
+      # The newest Mac Catalyst SDK can require an Xcode the runner image doesn't have yet, so build against the
+      # 26.0 SDK pack the workload also installs (works with any Xcode 26.x).
+      - run: dotnet build SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release -p:TargetFrameworks=net10.0-maccatalyst26.0
         working-directory: src
 
   publish:

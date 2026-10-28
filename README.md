@@ -439,7 +439,9 @@ dotnet run
 ```
 
 Or open `src/SocialPoster.slnx` in Visual Studio, Rider or VS Code and start `SocialPoster.MAUI`. On Windows it runs as
-an unpackaged desktop app; on macOS it is a Mac Catalyst app.
+an unpackaged desktop app; on macOS it is a Mac Catalyst app. If the build says the installed Xcode is too old for
+the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for example
+`dotnet run -p:TargetFrameworks=net10.0-maccatalyst26.0` for Xcode 26.
 
 - **Shared data.** It uses the same data folder and key ring as the Web sample, so accounts, contacts, history and
   scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
