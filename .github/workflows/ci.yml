@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,8 +27,42 @@ jobs:
       - run: dotnet test --configuration Release --no-build
         working-directory: src
 
-  # Mac Catalyst can only be built on macOS.
-  maui-macos:
+  # Desktop app for Windows: a self-contained, unpackaged build zipped per architecture.
+  desktop-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - { rid: win-x64, arch: x64 }
+          - { rid: win-arm64, arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet workload install maui-windows
+      - name: Publish
+        run: >-
+          dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
+          --framework net10.0-windows10.0.19041.0 --runtime ${{ matrix.rid }} --self-contained true
+          -p:WindowsAppSDKSelfContained=true --output ../artifacts/SocialPoster
+        working-directory: src
+      - name: Zip
+        shell: pwsh
+        run: |
+          # Core and Components copy the Copilot CLI for the build machine (x64); the arm64 app has its own copy.
+          if ('${{ matrix.rid }}' -ne 'win-x64') {
+            Remove-Item -Recurse -Force artifacts/SocialPoster/runtimes/win-x64 -ErrorAction SilentlyContinue
+          }
+          7z a -tzip artifacts/SocialPoster-windows-${{ matrix.arch }}.zip ./artifacts/SocialPoster
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ matrix.arch }}
+          path: artifacts/*.zip
+          retention-days: 7
+
+  # Desktop app for macOS (Mac Catalyst, Intel and Apple silicon). Can only be built on macOS.
+  desktop-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +76,50 @@ jobs:
       # The newest Mac Catalyst SDK can require an Xcode the runner image doesn't have yet, so build against the
       # 26.0 SDK pack the workload also installs. Each pack requires its exact Xcode major.minor version.
       # Serialize MSBuild to avoid concurrent native-library rewrites during Mac Catalyst packaging.
-      - run: dotnet build SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release -p:MacCatalystSdkVersion=26.0 -m:1
+      # The app is ad-hoc signed (CodesignKey=-): there's no Developer ID certificate, so it isn't notarized.
+      - name: Publish
+        run: >-
+          dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
+          -p:MacCatalystSdkVersion=26.0 -m:1
+          -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=-
         working-directory: src
+      - name: Zip
+        run: |
+          app=$(find src/SocialPoster.MAUI/bin/Release -mindepth 2 -maxdepth 2 -name '*.app' -type d | head -n 1)
+          if [ -z "$app" ]; then echo "No .app bundle found:"; find src/SocialPoster.MAUI/bin -name '*.app' -type d; exit 1; fi
+          echo "Packaging $app"
+          codesign --verify --deep --strict "$app"
+          mkdir -p artifacts
+          ditto "$app" artifacts/SocialPoster.app
+          ditto -c -k --sequesterRsrc --keepParent artifacts/SocialPoster.app artifacts/SocialPoster-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: artifacts/SocialPoster-macos.zip
+          retention-days: 7
+
+  # On a v* tag, attach the desktop apps to the GitHub release (created with generated notes if it doesn't exist).
+  release:
+    needs: [build, desktop-windows, desktop-macos]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist
+          merge-multiple: true
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          gh release upload "$TAG" dist/*.zip --clobber
 
   publish:
     needs: build
