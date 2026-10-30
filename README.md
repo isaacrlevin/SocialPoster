@@ -9,20 +9,18 @@ and the MAUI project runs the same app as a desktop window on Windows and macOS.
 Posts can go out now or be scheduled for later, and an optional AI agent (GitHub Copilot or any OpenAI-compatible
 provider) finds people's accounts and drafts posts from a link.
 
-**Just want to post?** The posting engine is its own package, [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md):
-publish to all five platforms from any .NET app with no database, UI or ASP.NET. `SocialPoster.Core` and the Blazor
-components build on it. Install with `dotnet add package SocialPoster.Posting` (see
-[Installing the packages](#installing-the-packages)).
+## Three ways to use it
 
-**Prefer a desktop app?** [`SocialPoster.MAUI`](src/SocialPoster.MAUI) runs the full app in its own window on Windows
-and macOS, with no browser or local web server, and shares its data with the Web sample (see
-[Run it as a desktop app](#run-it-as-a-desktop-app-windows-and-macos)).
+| Way                                                                   | Best for                                                                    | You need                                       |
+|-----------------------------------------------------------------------|-----------------------------------------------------------------------------|------------------------------------------------|
+| [**Desktop app**](#1-use-the-desktop-app-windows-and-macos)           | Just using SocialPoster on Windows or macOS, in its own window              | A download from the [Releases page][releases]  |
+| [**Host the Web project**](#2-host-the-web-project)                   | Running it in your browser on any OS (including Linux), or changing the app | The .NET 10 SDK and a clone of this repository |
+| [**NuGet packages**](#3-reference-the-nuget-packages-in-your-own-app) | Adding posting, or the whole UI, to your own .NET app                       | A .NET 10 project                              |
 
-| Package                                                     | What it is                                                         |
-|-------------------------------------------------------------|--------------------------------------------------------------------|
-| [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md) | Platform clients, rendering, character counting and media rules   |
-| `SocialPoster.Core`                                         | SQLite storage, contacts, history, scheduling and the account finder |
-| `SocialPoster.Components`                                   | The Blazor UI (pages, layout, theme and assets)                    |
+The desktop app and the Web project share the same local data folder, so you can switch between them without
+reconnecting accounts.
+
+[releases]: https://github.com/isaacrlevin/SocialPoster/releases/latest
 
 ![Compose page](img/compose.png)
 
@@ -404,42 +402,84 @@ profile at all. Confirm the result against the profile link before relying on it
 
 ## Getting started
 
-### Prerequisites
+Pick one of the [three ways to use it](#three-ways-to-use-it). Whichever you choose, nothing else is needed to try the
+app: Bluesky search and **Copy text** work without any account. Then open **Accounts** to choose your platforms and
+connect the ones you want to post to (see [Connecting accounts](#connecting-accounts)).
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- Git
-- For the desktop app only: the .NET MAUI workload (`maui-windows` on Windows, or `maui-maccatalyst` plus Xcode on
-  macOS)
-- Optional: the [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli) (or a GitHub
-  token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder. Nothing else is
-  required to try the app: Bluesky search and "Copy text" work without any account.
+The [account finder](#account-finder-agent-x-and-linkedin) is optional. It needs the
+[GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli) (or a GitHub token) with a
+Copilot subscription, or an OpenAI-compatible provider such as a local Ollama model.
 
-### Run it
+### 1. Use the desktop app (Windows and macOS)
 
-```bash
-git clone https://github.com/isaacrlevin/SocialPoster.git
-cd SocialPoster/src/SocialPoster.Web
-dotnet run --launch-profile http    # http://localhost:5184
-```
+`SocialPoster.MAUI` is a .NET MAUI Blazor Hybrid app that hosts the full UI in its own window, with no browser or local
+web server. Prebuilt apps are attached to every release, and you don't need .NET installed to run them.
 
-Your browser opens to the app once it's listening (set `SocialPoster:LaunchBrowser` to `false` to turn this off).
+**Windows**
 
-Works on Windows, Linux and macOS. The database is created automatically on first run; there is no migration or setup
-step. Then open **Accounts** to choose your platforms and connect the ones you want to post to
-(see [Connecting accounts](#connecting-accounts)). The sample runs the scheduling worker, so scheduled posts go out
-while it is running.
+1. From the [latest release][releases], download `SocialPoster-windows-x64.zip` (most PCs) or
+   `SocialPoster-windows-arm64.zip` (Windows on Arm, such as Snapdragon laptops).
+2. Right-click the zip, choose **Extract All**, and move the extracted `SocialPoster` folder somewhere permanent, for
+   example `%LOCALAPPDATA%\Programs\SocialPoster`.
+3. Run `SocialPoster.MAUI.exe` in that folder. To find it again, right-click it and choose **Pin to Start**, or
+   **Show more options → Send to → Desktop (create shortcut)**.
+4. The app isn't code-signed, so the first time, Windows SmartScreen may say *Windows protected your PC*. Choose
+   **More info → Run anyway**.
 
-Run the tests from the `src` folder with `dotnet test`.
+To update, close the app and replace the folder with the new release. Your data is stored elsewhere (see
+[Configuration](#configuration)), so it's kept.
 
-### Run it as a desktop app (Windows and macOS)
+**macOS**
 
-`SocialPoster.MAUI` is a .NET MAUI Blazor Hybrid app that hosts the same UI in its own window, with no browser or local
-web server. It needs the MAUI workload (once):
+1. From the [latest release][releases], download `SocialPoster-macos.zip`. It's a universal app for Intel and Apple
+   silicon Macs.
+2. Open the zip (Safari usually unzips it for you) and drag `SocialPoster.app` into **Applications**.
+3. The app is ad-hoc signed, not signed with an Apple Developer ID or notarized, so macOS blocks it the first time.
+   Open it once, then go to **System Settings → Privacy & Security**, scroll to the message about SocialPoster and
+   click **Open Anyway**. Or remove the download quarantine in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/SocialPoster.app
+   ```
+
+4. To use GitHub Copilot as the agent, install the Copilot CLI and sign in (the Mac app doesn't bundle it):
+
+   ```bash
+   npm install -g @github/copilot
+   copilot login
+   ```
+
+To update, quit the app and replace `SocialPoster.app` with the new one.
+
+**What to know**
+
+- **Requirements.** Windows 10 version 1809 or later (x64 or Arm64) with the
+  [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), or macOS 12 or later on
+  Intel or Apple silicon.
+- **Shared data.** It uses the same data folder and key ring as the Web project, so accounts, contacts, history and
+  scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
+  goes out once.
+- **Scheduling.** The app runs the scheduling worker while its window is open. Closing the window stops it, waiting up
+  to 10 seconds for a post that is already going out. Posts due while the app is closed go out the next time it (or the
+  Web project) runs, unless they are more than 24 hours overdue (see [Scheduling posts](#scheduling-posts)).
+- **Account finder.** On Windows the Copilot CLI is included, as in the Web project. On macOS, install it yourself
+  (step 4 above). The app finds it on `PATH` or in the usual Homebrew/npm folders, or set `COPILOT_CLI_PATH`. Your own
+  provider works without it.
+- **Links and copying.** **View post**, profile links, X's browser composer and LinkedIn tagging open in your default
+  browser. **Copy text** uses the system clipboard.
+- **macOS sandbox.** The app isn't sandboxed (it shares `~/Library/Application Support/SocialPoster` with the Web
+  project and starts the Copilot CLI for the account finder), so it can't be distributed through the Mac App Store as
+  is.
+
+**Build it from source**
+
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), Git and the MAUI workload (once):
 
 ```bash
 dotnet workload install maui-windows      # on Windows
 dotnet workload install maui-maccatalyst  # on macOS (also needs Xcode)
 
+git clone https://github.com/isaacrlevin/SocialPoster.git
 cd SocialPoster/src/SocialPoster.MAUI
 dotnet run
 ```
@@ -449,25 +489,75 @@ an unpackaged desktop app; on macOS it is a Mac Catalyst app. If the build says 
 the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for example
 `dotnet run -p:MacCatalystSdkVersion=26.0` with Xcode 26.0 (each SDK pack needs its matching Xcode version).
 
-There are no prebuilt downloads yet, so build it from source as above.
+To produce the same zips as a release, run the `dotnet publish` commands from the `desktop-windows` and `desktop-macos`
+jobs in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-- **Requirements.** Windows 10 version 1809 or later, or macOS 12 or later on Intel or Apple silicon (the Mac build
-  includes both architectures).
-- **Shared data.** It uses the same data folder and key ring as the Web sample, so accounts, contacts, history and
-  scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
-  goes out once.
-- **Scheduling.** The app runs the scheduling worker while its window is open. Closing the window stops it, waiting up
-  to 10 seconds for a post that is already going out. Posts due while the app is closed go out the next time it (or the
-  Web sample) runs, unless they are more than 24 hours overdue (see [Scheduling posts](#scheduling-posts)).
-- **Account finder.** On Windows the Copilot CLI is included, as in the Web sample. On macOS, install it yourself
-  (below).
-- **Links and copying.** **View post**, profile links, X's browser composer and LinkedIn tagging open in your default
-  browser. **Copy text** uses the system clipboard.
-- **macOS.** The app isn't sandboxed (it shares `~/Library/Application Support/SocialPoster` with the Web sample and
-  starts the Copilot CLI for the account finder), so it can't be distributed through the Mac App Store as is. The Mac
-  app doesn't bundle the Copilot CLI: to use GitHub Copilot as the agent, install it (for example
-  `npm install -g @github/copilot`) and sign in with `copilot login`. The app finds it on `PATH` or in the usual
-  Homebrew/npm folders, or set `COPILOT_CLI_PATH`. Your own provider works without it.
+### 2. Host the Web project
+
+`SocialPoster.Web` is a small Blazor Server host for the same UI. It runs on Windows, Linux and macOS and opens in your
+browser. It's a **local, single-user** app with no login, so keep it on `localhost` (see
+[Security notes](#security-notes)).
+
+1. Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and Git.
+2. Clone the repository and run the Web project:
+
+   ```bash
+   git clone https://github.com/isaacrlevin/SocialPoster.git
+   cd SocialPoster/src/SocialPoster.Web
+   dotnet run --launch-profile http    # http://localhost:5184
+   ```
+
+3. Your browser opens to the app once it's listening (set `SocialPoster:LaunchBrowser` to `false` to turn this off).
+   The database is created automatically on first run; there is no migration or setup step.
+
+To start it without the SDK each time (for example at login, so scheduled posts keep going out), publish it once and
+run the output:
+
+```bash
+cd SocialPoster/src/SocialPoster.Web
+dotnet publish -c Release -o ~/socialposter-web -p:ErrorOnDuplicatePublishOutputFiles=false
+cd ~/socialposter-web
+ASPNETCORE_URLS=http://localhost:5184 ./SocialPoster.Web
+```
+
+On Windows, run `set ASPNETCORE_URLS=http://localhost:5184` and then `SocialPoster.Web.exe`. The published app needs
+the .NET 10 runtime, or add `--self-contained -r <rid>` (for example `-r linux-x64`) to include it. It runs the
+scheduling worker, so scheduled posts go out while it's running. The data folder, port and other settings are under
+[Configuration](#configuration). Run the tests from the `src` folder with `dotnet test`.
+
+### 3. Reference the NuGet packages in your own app
+
+The implementation ships as three NuGet packages that share one version. Each includes the ones below it, so add only
+the one you need:
+
+| Package                                                      | What it is                                                           | Use it when                                    |
+|--------------------------------------------------------------|----------------------------------------------------------------------|------------------------------------------------|
+| [`SocialPoster.Posting`](src/SocialPoster.Posting/README.md) | Platform clients, rendering, character counting and media rules      | You only want to publish posts from code       |
+| `SocialPoster.Core`                                          | SQLite storage, contacts, history, scheduling and the account finder | You want the backend without the UI            |
+| `SocialPoster.Components`                                    | The Blazor UI (pages, layout, theme and assets)                      | You want the whole app inside your Blazor host |
+
+**Just posting** (any .NET 10 app, no database, UI or ASP.NET):
+
+1. Add the package: `dotnet add package SocialPoster.Posting`.
+2. Call `services.AddSocialPosting()`, register an `ICredentialStore` with your tokens (for example
+   `InMemoryCredentialStore`), and resolve `SocialPublisher`.
+3. Publish: `await publisher.PublishTextAsync("Hello!", [Platform.Bluesky, Platform.Mastodon])`.
+
+The [Posting README](src/SocialPoster.Posting/README.md) has a complete example and the credential keys for each
+platform.
+
+**The full app inside your Blazor Server or MAUI Blazor Hybrid app:**
+
+1. Add the package: `dotnet add package SocialPoster.Components` (or `SocialPoster.Core` for the backend only).
+2. In `Program.cs`, call `AddSocialPosterCore(...)` and `AddSocialPosterComponents()`, and optionally
+   `AddSocialPosterScheduling()` and `AddSocialPosterSchedulingWorker()`.
+3. Configure a persistent Data Protection key ring for your host, then call
+   `await app.Services.InitializeSocialPosterAsync()` after building the app.
+4. Map the library's routes (`/socialposter`) and add its stylesheets and scripts to your `App.razor`, or render
+   `SocialPosterView` or individual pages from your own components.
+
+[Embed SocialPoster in your own project](#embed-socialposter-in-your-own-project) walks through each step with complete
+code, plus scheduling, custom paths and the security responsibilities that come with hosting it.
 
 ### Configuration
 
@@ -497,7 +587,8 @@ To change the port, set `ASPNETCORE_URLS` (for example `ASPNETCORE_URLS=http://l
 
 ## Embed SocialPoster in your own project
 
-Three packable libraries contain the implementation, all published to NuGet with the same version:
+This is the detailed guide for [using the NuGet packages](#3-reference-the-nuget-packages-in-your-own-app). Three
+packable libraries contain the implementation, all published to NuGet with the same version:
 
 - **SocialPoster.Posting**: platform clients (`BlueskyClient`, `XClient`, `LinkedInClient`, `MastodonClient`,
   `ThreadsClient`), `SocialPublisher`, post rendering, character counting, media rules and `ICredentialStore`. Needs
@@ -937,8 +1028,9 @@ through the API.
 ## Contributing
 
 Issues and pull requests are welcome. Please run `dotnet build` and `dotnet test` from the `src` folder before
-submitting (CI runs both on Linux and Windows, and builds the MAUI app on macOS). Building the whole solution on Windows
-or macOS needs the MAUI workload (see [Run it as a desktop app](#run-it-as-a-desktop-app-windows-and-macos)); on Linux
+submitting (CI runs both on Linux and Windows, and publishes the desktop app for Windows and macOS; each run's
+**Artifacts** include the zips for trying a change). Building the whole solution on Windows or macOS needs the MAUI
+workload (see [Build it from source](#1-use-the-desktop-app-windows-and-macos)); on Linux
 `SocialPoster.MAUI` builds as an empty placeholder. Keep platform posting in `SocialPoster.Posting`, app services and
 storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web and MAUI hosts, with
 relevant tests.
@@ -949,16 +1041,19 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ### Releasing
 
-All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.1`).
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.1`). The desktop
+app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialPoster.MAUI.csproj`; keep it the same.
 
 - **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
   Components as `<version>-local.<timestamp>` into `~/.nuget-local` (`-FeedPath` to change it, `-Register` to add it as
   the `SocialPosterLocal` NuGet source, `-SkipTests` to skip tests).
 - **Check the release packages:** `scripts/publish-nuget.ps1` runs the tests and packs all three into `artifacts/`. It
   doesn't publish.
-- **Publish:** bump the version in all three projects (and the version examples in this README, the Posting README and
-  `docs/index.html`), commit, and push a matching tag (for example `v0.6.1`). The CI
-  `publish` job packs and pushes to nuget.org with
+- **Publish:** bump the version in all three projects and the MAUI app (and the version examples in this README, the
+  Posting README and `docs/index.html`), commit, and push a matching tag (for example `v0.6.1`). The CI `release` job
+  creates the GitHub release for the tag (with generated notes, unless you've already created it) and attaches
+  `SocialPoster-windows-x64.zip`, `SocialPoster-windows-arm64.zip` and `SocialPoster-macos.zip`. The `publish` job
+  packs and pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
   policy for this repository and workflow on nuget.org, and a `NUGET_USER` secret holding the nuget.org user name.

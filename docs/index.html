@@ -19,6 +19,7 @@
   <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong>, <strong>Mastodon</strong> and <strong>Threads</strong>, now or on a schedule, with @-mentions converted correctly for each platform.</p>
   <div class="btns">
     <a class="btn primary" href="#quick-start">Get started</a>
+    <a class="btn" href="https://github.com/isaacrlevin/SocialPoster/releases/latest">Download for Windows &amp; macOS</a>
     <a class="btn" href="https://github.com/isaacrlevin/SocialPoster">View on GitHub</a>
   </div>
   <div class="hero-shot"><img src="img/compose.png" alt="The Compose page with a draft post, the scheduling panel and a card for each of the five platforms"></div>
@@ -29,6 +30,9 @@
     <strong>On this page</strong>
     <a href="#features">Features</a>
     <a href="#quick-start">Quick start</a>
+    <a class="sub" href="#desktop">Desktop app</a>
+    <a class="sub" href="#web">Host the Web project</a>
+    <a class="sub" href="#packages">NuGet packages</a>
     <a href="#connect">Connect accounts</a>
     <a class="sub" href="#bluesky">Bluesky</a>
     <a class="sub" href="#x">X</a>
@@ -65,33 +69,65 @@
         <div class="card"><h3>Local and private</h3><p>Runs on your computer. Credentials are encrypted in a local SQLite database and never leave it.</p></div>
         <div class="card"><h3>Reusable packages</h3><p>Use the posting engine on its own from any .NET app, or embed the whole UI in your own Blazor host.</p></div>
       </div>
-      <p>SocialPoster is a Blazor Server app on .NET 10 with a MudBlazor UI (light and dark themes). It works on Windows, Linux and macOS.</p>
+      <p>SocialPoster is built on .NET 10 with a MudBlazor UI (light and dark themes). Run it as a desktop app on Windows and macOS, host the Web project in your browser on Windows, Linux or macOS, or add its NuGet packages to your own app.</p>
     </section>
 
     <section id="quick-start">
       <h2>Quick start</h2>
-      <h3>Prerequisites</h3>
-      <ul>
-        <li>The <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 SDK</a></li>
-        <li>Git</li>
-        <li><em>Optional:</em> the <a href="https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli">GitHub Copilot CLI</a> (or a GitHub token), or an OpenAI-compatible provider such as a local Ollama model, for the account finder</li>
-      </ul>
-      <h3>Run it</h3>
+      <p>There are three ways to use SocialPoster. They all run the same code, and the desktop app and Web project share one local data folder, so you can switch between them without reconnecting accounts.</p>
+      <div class="cards">
+        <div class="card"><h3><a href="#desktop">Desktop app</a></h3><p>Download and run it on Windows or macOS, in its own window. No .NET needed.</p></div>
+        <div class="card"><h3><a href="#web">Host the Web project</a></h3><p>Run it in your browser on Windows, Linux or macOS with the .NET 10 SDK, or change the app.</p></div>
+        <div class="card"><h3><a href="#packages">NuGet packages</a></h3><p>Add posting, or the whole UI, to your own .NET 10 app.</p></div>
+      </div>
+      <div class="note">
+        <strong>Try it with nothing connected</strong>
+        <p>Bluesky search and <em>Copy text</em> work without any account. Connect the platforms you want to publish to on the <a href="#connect">Accounts</a> page. The <a href="#agent">account finder agent</a> is optional; it needs the <a href="https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli">GitHub Copilot CLI</a> (or a GitHub token), or an OpenAI-compatible provider such as a local Ollama model.</p>
+      </div>
+
+      <h3 id="desktop">1. Desktop app (Windows and macOS)</h3>
+      <p>Prebuilt apps are attached to every <a href="https://github.com/isaacrlevin/SocialPoster/releases/latest">GitHub release</a>.</p>
+      <p><strong>Windows</strong> (Windows 10 version 1809 or later, with the <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>)</p>
+      <ol>
+        <li>Download <code>SocialPoster-windows-x64.zip</code> (most PCs) or <code>SocialPoster-windows-arm64.zip</code> (Windows on Arm).</li>
+        <li>Right-click it, choose <em>Extract All</em>, and move the <code>SocialPoster</code> folder somewhere permanent, such as <code>%LOCALAPPDATA%\Programs\SocialPoster</code>.</li>
+        <li>Run <code>SocialPoster.MAUI.exe</code>. Pin it to Start or create a desktop shortcut to find it again.</li>
+        <li>The app isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em> the first time. Choose <em>More info → Run anyway</em>.</li>
+      </ol>
+      <p><strong>macOS</strong> (macOS 12 or later, Intel or Apple silicon)</p>
+      <ol>
+        <li>Download <code>SocialPoster-macos.zip</code>, open it and drag <code>SocialPoster.app</code> into <em>Applications</em>.</li>
+        <li>The app isn't notarized, so macOS blocks it the first time. Open it once, then go to <em>System Settings → Privacy &amp; Security</em> and click <em>Open Anyway</em>. Or run <code>xattr -dr com.apple.quarantine /Applications/SocialPoster.app</code> in Terminal.</li>
+        <li>To use GitHub Copilot as the agent, install the Copilot CLI (<code>npm install -g @github/copilot</code>) and run <code>copilot login</code>. The Windows app includes it; the Mac app doesn't.</li>
+      </ol>
+      <p>To update, replace the folder or app with the new release; your data is stored separately and kept. Scheduled posts go out while the window is open, and links open in your default browser.</p>
+      <details>
+        <summary>Build the desktop app from source</summary>
+        <p>Install the .NET 10 SDK and the MAUI workload once (<code>maui-windows</code> on Windows, <code>maui-maccatalyst</code> on macOS, which also needs Xcode), then run it:</p>
+<pre><code>dotnet workload install maui-windows      # or maui-maccatalyst on macOS
+git clone https://github.com/isaacrlevin/SocialPoster.git
+cd SocialPoster/src/SocialPoster.MAUI
+dotnet run</code></pre>
+      </details>
+
+      <h3 id="web">2. Host the Web project</h3>
+      <p>Needs the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 SDK</a> and Git. Works on Windows, Linux and macOS.</p>
 <pre><code>git clone https://github.com/isaacrlevin/SocialPoster.git
 cd SocialPoster/src/SocialPoster.Web
 dotnet run --launch-profile http</code></pre>
-      <p>Your browser opens to <a href="http://localhost:5184">http://localhost:5184</a> once the app is listening (set <code>SocialPoster:LaunchBrowser</code> to <code>false</code> to turn this off). The database is created automatically on first run, so there is no migration or setup step. The sample also runs the scheduling worker, so scheduled posts go out while it's running.</p>
-      <div class="note">
-        <strong>Try it with nothing connected</strong>
-        <p>Bluesky search and <em>Copy text</em> work without any account. Connect the platforms you want to publish to on the <em>Accounts</em> page.</p>
-      </div>
-      <h3>Or run it as a desktop app</h3>
-      <p><code>SocialPoster.MAUI</code> hosts the same app in its own window on Windows and macOS, with no browser or local web server. Install the MAUI workload once (<code>maui-windows</code> on Windows, <code>maui-maccatalyst</code> on macOS, which also needs Xcode), then run it:</p>
-<pre><code>dotnet workload install maui-windows      # or maui-maccatalyst on macOS
-cd SocialPoster/src/SocialPoster.MAUI
-dotnet run</code></pre>
-      <p>It shares the Web sample's data folder, so accounts, contacts, history and scheduled posts are the same in both. Scheduled posts go out while its window is open, and links open in your default browser.</p>
-      <p>To run the tests, use <code>dotnet test</code> from the <code>src</code> folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>.</p>
+      <p>Your browser opens to <a href="http://localhost:5184">http://localhost:5184</a> once the app is listening (set <code>SocialPoster:LaunchBrowser</code> to <code>false</code> to turn this off). The database is created automatically on first run, so there is no migration or setup step. The Web project runs the scheduling worker, so scheduled posts go out while it's running.</p>
+      <p>To start it without the SDK each time, publish it once with <code>dotnet publish -c Release -o ~/socialposter-web -p:ErrorOnDuplicatePublishOutputFiles=false</code> and run <code>SocialPoster.Web</code> from that folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>. It has no login, so keep it on <code>localhost</code> (see <a href="#security">Security</a>). To run the tests, use <code>dotnet test</code> from the <code>src</code> folder.</p>
+
+      <h3 id="packages">3. NuGet packages</h3>
+      <p>Add one package to a .NET 10 project. Each includes the ones below it:</p>
+<pre><code>dotnet add package SocialPoster.Posting      # just posting: no database, UI or ASP.NET
+dotnet add package SocialPoster.Core         # backend: storage, contacts, scheduling, agent
+dotnet add package SocialPoster.Components   # the full Blazor UI</code></pre>
+      <ul>
+        <li><strong>Just posting:</strong> call <code>services.AddSocialPosting()</code>, register an <code>ICredentialStore</code> with your tokens, resolve <code>SocialPublisher</code> and call <code>PublishTextAsync</code>. See the <a href="https://github.com/isaacrlevin/SocialPoster/blob/main/src/SocialPoster.Posting/README.md">Posting README</a> for a complete example.</li>
+        <li><strong>The full app in your Blazor Server or MAUI host:</strong> call <code>AddSocialPosterCore()</code> and <code>AddSocialPosterComponents()</code>, configure a persistent Data Protection key ring, call <code>InitializeSocialPosterAsync()</code> at startup, then map the <code>/socialposter</code> routes and add the library's assets.</li>
+      </ul>
+      <p>See <a href="#embed">Packages and embedding</a> and the <a href="https://github.com/isaacrlevin/SocialPoster#embed-socialposter-in-your-own-project">README's consumer guide</a> for the full steps.</p>
     </section>
 
     <section id="connect">

@@ -39,6 +39,12 @@
         <EnableDefaultRazorComponentItems>false</EnableDefaultRazorComponentItems>
     </PropertyGroup>
 
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+        <!-- Core, Components and this app each copy the same Copilot CLI files into their output, so `dotnet publish`
+             sees duplicates. They are identical, so let one copy win. -->
+        <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+    </PropertyGroup>
+
     <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
         <!-- Both architectures so the app runs on Intel and Apple silicon Macs. -->
         <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
