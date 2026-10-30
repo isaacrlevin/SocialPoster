@@ -80,6 +80,7 @@ jobs:
       - name: Publish
         run: >-
           dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
+          --framework net10.0-maccatalyst26.0
           -p:MacCatalystSdkVersion=26.0 -m:1
           -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=-
         working-directory: src

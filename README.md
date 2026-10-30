@@ -453,7 +453,9 @@ To update, quit the app and replace `SocialPoster.app` with the new one.
 
 **What to know**
 
-- **Requirements.** Windows 10 version 1809 or later (x64 or Arm64), or macOS 12 or later on Intel or Apple silicon.
+- **Requirements.** Windows 10 version 1809 or later (x64 or Arm64) with the
+  [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), or macOS 12 or later on
+  Intel or Apple silicon.
 - **Shared data.** It uses the same data folder and key ring as the Web project, so accounts, contacts, history and
   scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
   goes out once.
@@ -513,7 +515,7 @@ run the output:
 
 ```bash
 cd SocialPoster/src/SocialPoster.Web
-dotnet publish -c Release -o ~/socialposter-web
+dotnet publish -c Release -o ~/socialposter-web -p:ErrorOnDuplicatePublishOutputFiles=false
 cd ~/socialposter-web
 ASPNETCORE_URLS=http://localhost:5184 ./SocialPoster.Web
 ```

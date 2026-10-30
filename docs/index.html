@@ -87,7 +87,7 @@
 
       <h3 id="desktop">1. Desktop app (Windows and macOS)</h3>
       <p>Prebuilt apps are attached to every <a href="https://github.com/isaacrlevin/SocialPoster/releases/latest">GitHub release</a>.</p>
-      <p><strong>Windows</strong> (Windows 10 version 1809 or later)</p>
+      <p><strong>Windows</strong> (Windows 10 version 1809 or later, with the <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>)</p>
       <ol>
         <li>Download <code>SocialPoster-windows-x64.zip</code> (most PCs) or <code>SocialPoster-windows-arm64.zip</code> (Windows on Arm).</li>
         <li>Right-click it, choose <em>Extract All</em>, and move the <code>SocialPoster</code> folder somewhere permanent, such as <code>%LOCALAPPDATA%\Programs\SocialPoster</code>.</li>
@@ -116,7 +116,7 @@ dotnet run</code></pre>
 cd SocialPoster/src/SocialPoster.Web
 dotnet run --launch-profile http</code></pre>
       <p>Your browser opens to <a href="http://localhost:5184">http://localhost:5184</a> once the app is listening (set <code>SocialPoster:LaunchBrowser</code> to <code>false</code> to turn this off). The database is created automatically on first run, so there is no migration or setup step. The Web project runs the scheduling worker, so scheduled posts go out while it's running.</p>
-      <p>To start it without the SDK each time, publish it once with <code>dotnet publish -c Release -o ~/socialposter-web</code> and run <code>SocialPoster.Web</code> from that folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>. It has no login, so keep it on <code>localhost</code> (see <a href="#security">Security</a>). To run the tests, use <code>dotnet test</code> from the <code>src</code> folder.</p>
+      <p>To start it without the SDK each time, publish it once with <code>dotnet publish -c Release -o ~/socialposter-web -p:ErrorOnDuplicatePublishOutputFiles=false</code> and run <code>SocialPoster.Web</code> from that folder. To change the port, set <code>ASPNETCORE_URLS</code>, for example <code>ASPNETCORE_URLS=http://localhost:8080 dotnet run</code>. It has no login, so keep it on <code>localhost</code> (see <a href="#security">Security</a>). To run the tests, use <code>dotnet test</code> from the <code>src</code> folder.</p>
 
       <h3 id="packages">3. NuGet packages</h3>
       <p>Add one package to a .NET 10 project. Each includes the ones below it:</p>
