@@ -1041,7 +1041,7 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ### Releasing
 
-All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.1`). The desktop
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.2`). The desktop
 app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialPoster.MAUI.csproj`; keep it the same.
 
 - **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
@@ -1050,10 +1050,12 @@ app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialP
 - **Check the release packages:** `scripts/publish-nuget.ps1` runs the tests and packs all three into `artifacts/`. It
   doesn't publish.
 - **Publish:** bump the version in all three projects and the MAUI app (and the version examples in this README, the
-  Posting README and `docs/index.html`), commit, and push a matching tag (for example `v0.6.1`). The CI `release` job
-  creates the GitHub release for the tag (with generated notes, unless you've already created it) and attaches
-  `SocialPoster-windows-x64.zip`, `SocialPoster-windows-arm64.zip` and `SocialPoster-macos.zip`. The `publish` job
-  packs and pushes to nuget.org with
+  Posting README and `docs/index.html`), commit, and push to `main`. There's no tag to push: the CI `version` job reads
+  the version (and fails if the four don't match), and if there's no `v<version>` tag yet, the release runs. The
+  `publish` job packs and pushes to nuget.org, then the `release` job creates the tag and GitHub release on that commit
+  (with generated notes) and attaches `SocialPoster-windows-x64.zip`, `SocialPoster-windows-arm64.zip` and
+  `SocialPoster-macos.zip`. If publishing fails, no tag is created, so the next push to `main` (or a manual run of the
+  workflow) tries again. The `publish` job pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
   policy for this repository and workflow on nuget.org, and a `NUGET_USER` secret holding the nuget.org user name.

@@ -3,14 +3,47 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# Runs on the same ref queue up, so two quick pushes to main can't both release the same version.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # On main, a version with no v<version> tag yet means "release it": publish and release run, and release creates the tag.
+  version:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version
+        id: version
+        run: |
+          versions=$(grep -hoP '(?<=<Version>)[^<]+' src/SocialPoster.{Posting,Core,Components}/*.csproj)
+          app=$(grep -hoP '(?<=<ApplicationDisplayVersion>)[^<]+' src/SocialPoster.MAUI/SocialPoster.MAUI.csproj)
+          unique=$(printf '%s\n' $versions "$app" | sort -u)
+          if [ "$(printf '%s\n' "$unique" | wc -l)" -ne 1 ]; then
+            echo "::error::The library <Version>s and the MAUI <ApplicationDisplayVersion> must match. Found: $(echo $versions) (libraries), $app (app)."
+            exit 1
+          fi
+          tag="v$unique"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "$tag already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$tag doesn't exist yet; releasing."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -102,10 +135,11 @@ jobs:
           path: artifacts/SocialPoster-macos.zip
           retention-days: 7
 
-  # On a v* tag, attach the desktop apps to the GitHub release (created with generated notes if it doesn't exist).
+  # Creates the tag and GitHub release (with generated notes) on this commit and attaches the desktop apps. Runs after
+  # publish, so a failed NuGet push leaves no tag and the next run on main tries the release again.
   release:
-    needs: [build, desktop-windows, desktop-macos]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [version, publish, desktop-windows, desktop-macos]
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -119,44 +153,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
           ls -l dist
-          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
           gh release upload "$TAG" dist/*.zip --clobber
 
   publish:
-    needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [version, build]
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # required for NuGet Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history + tags so we can diff against the previous release
-      # Only publish when something under src/ changed since the previous v* tag.
-      - name: Check for src changes
-        id: changes
-        run: |
-          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_SHA}^" 2>/dev/null || true)
-          if [ -z "$prev" ]; then
-            echo "No previous release tag found; publishing."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$prev" "$GITHUB_SHA" -- src; then
-            echo "No changes under src/ since $prev; skipping publish."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "src/ changed since $prev; publishing."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/setup-dotnet@v4
-        if: steps.changes.outputs.changed == 'true'
         with:
           dotnet-version: 10.0.x
       - name: Pack
-        if: steps.changes.outputs.changed == 'true'
         run: |
           dotnet pack src/SocialPoster.Posting/SocialPoster.Posting.csproj --configuration Release --output artifacts
           dotnet pack src/SocialPoster.Core/SocialPoster.Core.csproj --configuration Release --output artifacts
@@ -164,10 +179,8 @@ jobs:
       # Exchanges the workflow's OIDC token for a short-lived NuGet API key (Trusted Publishing).
       - name: NuGet login
         id: nuget-login
-        if: steps.changes.outputs.changed == 'true'
         uses: NuGet/login@v1
         with:
           user: ${{ secrets.NUGET_USER }}
       - name: Push to NuGet
-        if: steps.changes.outputs.changed == 'true'
         run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

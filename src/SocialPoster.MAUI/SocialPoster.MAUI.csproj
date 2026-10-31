@@ -19,7 +19,7 @@
 
         <ApplicationTitle>SocialPoster</ApplicationTitle>
         <ApplicationId>com.isaacrlevin.socialposter</ApplicationId>
-        <ApplicationDisplayVersion>0.6.1</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>0.6.2</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
         <!-- Run unpackaged on Windows, like a normal desktop exe. See https://aka.ms/MauiTemplateUnpackaged -->
