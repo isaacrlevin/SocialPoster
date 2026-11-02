@@ -83,18 +83,30 @@ jobs:
           --framework net10.0-windows10.0.19041.0 --runtime ${{ matrix.rid }} --self-contained true
           -p:WindowsAppSDKSelfContained=true --output ../artifacts/SocialPoster
         working-directory: src
-      - name: Zip
+      - name: Package
         shell: pwsh
         run: |
           # Core and Components copy the Copilot CLI for the build machine (x64); the arm64 app has its own copy.
           if ('${{ matrix.rid }}' -ne 'win-x64') {
             Remove-Item -Recurse -Force artifacts/SocialPoster/runtimes/win-x64 -ErrorAction SilentlyContinue
           }
+          if (-not (Test-Path artifacts/SocialPoster/SocialPoster.MAUI.exe)) { throw 'SocialPoster.MAUI.exe not found in the publish output.' }
+
+          # Portable zip.
           7z a -tzip artifacts/SocialPoster-windows-${{ matrix.arch }}.zip ./artifacts/SocialPoster
+
+          # Installer (Inno Setup). The version comes from the csproj so it matches the release tag.
+          choco install innosetup --no-progress -y
+          $version = ([xml](Get-Content src/SocialPoster.MAUI/SocialPoster.MAUI.csproj)).Project.PropertyGroup.ApplicationDisplayVersion | Where-Object { $_ } | Select-Object -First 1
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DAppVersion=$version" "/DArch=${{ matrix.arch }}" "/DSourceDir=$PWD\artifacts\SocialPoster" "/DOutputDir=$PWD\artifacts" installers/windows/SocialPoster.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-${{ matrix.arch }}
-          path: artifacts/*.zip
+          path: |
+            artifacts/*.zip
+            artifacts/*-setup.exe
           retention-days: 7
 
   # Desktop app for macOS (Mac Catalyst, Intel and Apple silicon). Can only be built on macOS.
@@ -129,10 +141,19 @@ jobs:
           mkdir -p artifacts
           ditto "$app" artifacts/SocialPoster.app
           ditto -c -k --sequesterRsrc --keepParent artifacts/SocialPoster.app artifacts/SocialPoster-macos.zip
+      # Disk image with an Applications shortcut for drag-to-install. Mac Catalyst apps bundle the .NET runtime.
+      - name: Create DMG
+        run: |
+          mkdir -p dmg
+          ditto artifacts/SocialPoster.app dmg/SocialPoster.app
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname SocialPoster -srcfolder dmg -ov -format UDZO artifacts/SocialPoster-macos.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
-          path: artifacts/SocialPoster-macos.zip
+          path: |
+            artifacts/SocialPoster-macos.zip
+            artifacts/SocialPoster-macos.dmg
           retention-days: 7
 
   # Creates the tag and GitHub release (with generated notes) on this commit and attaches the desktop apps. Runs after
@@ -157,7 +178,7 @@ jobs:
         run: |
           ls -l dist
           gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
-          gh release upload "$TAG" dist/*.zip --clobber
+          gh release upload "$TAG" dist/*.zip dist/*-setup.exe dist/*.dmg --clobber
 
   publish:
     needs: [version, build]

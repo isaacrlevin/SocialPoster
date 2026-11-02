@@ -11,6 +11,22 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        try
+        {
+            return CreateMauiAppCore();
+        }
+        catch (Exception ex)
+        {
+            // An exception here kills the app with an opaque native crash report, so log it and tell the user first.
+            StartupDiagnostics.Report(ex);
+            throw;
+        }
+    }
+
+    private static MauiApp CreateMauiAppCore()
+    {
+        StartupDiagnostics.EnsureRequirements();
+
         if (OperatingSystem.IsMacCatalyst()) UseInstalledCopilotCli();
 
         var builder = MauiApp.CreateBuilder();
@@ -40,6 +56,7 @@ public static class MauiProgram
             File.SetUnixFileMode(dataDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             File.SetUnixFileMode(keysDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
+
         var protection = builder.Services.AddDataProtection()
             .SetApplicationName("SocialPoster")
             .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
@@ -66,9 +83,13 @@ public static class MauiProgram
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("COPILOT_CLI_PATH"))) return;
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        string[] knownDirs = ["/opt/homebrew/bin", "/usr/local/bin", Path.Combine(home, ".local", "bin"),
-            Path.Combine(home, ".npm-global", "bin"), Path.Combine(home, ".volta", "bin")];
-        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries);
+        string[] knownDirs =
+        [
+            "/opt/homebrew/bin", "/usr/local/bin", Path.Combine(home, ".local", "bin"),
+            Path.Combine(home, ".npm-global", "bin"), Path.Combine(home, ".volta", "bin")
+        ];
+        var pathDirs =
+            (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries);
         var cli = pathDirs.Concat(knownDirs).Select(dir => Path.Combine(dir, "copilot")).FirstOrDefault(File.Exists);
         if (cli is null) return;
 

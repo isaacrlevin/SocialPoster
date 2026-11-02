@@ -189,8 +189,13 @@ internal sealed class CopilotAgentBackend(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 await client.DisposeAsync();
+                // The Mac app doesn't bundle the Copilot CLI, so a missing install is the likely cause there.
+                var macHint = (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst())
+                              && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("COPILOT_CLI_PATH"))
+                    ? " The GitHub Copilot CLI wasn't found on this Mac: install it with `npm install -g @github/copilot` and run `copilot login`, or use your own provider under Accounts."
+                    : "";
                 throw new InvalidOperationException(
-                    $"Couldn't start GitHub Copilot: {ex.Message}. Sign in with the GitHub Copilot app or CLI (copilot login), or add a GitHub token under Accounts.",
+                    $"Couldn't start GitHub Copilot: {ex.Message}.{macHint} Sign in with the GitHub Copilot app or CLI (copilot login), or add a GitHub token under Accounts.",
                     ex);
             }
 

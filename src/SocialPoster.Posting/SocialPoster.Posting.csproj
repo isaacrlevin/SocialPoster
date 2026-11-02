@@ -7,7 +7,7 @@
         <RootNamespace>SocialPoster.Posting</RootNamespace>
         <IsPackable>true</IsPackable>
         <PackageId>SocialPoster.Posting</PackageId>
-        <Version>0.6.3</Version>
+        <Version>0.6.4</Version>
         <Authors>Isaac Levin</Authors>
         <Description>Post text and media to X, Bluesky, LinkedIn, Mastodon and Threads from any .NET app. No database, UI or ASP.NET required.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
