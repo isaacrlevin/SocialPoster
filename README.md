@@ -1041,7 +1041,7 @@ To enable it on a fork, go to **Settings → Pages** and set **Source** to **Git
 
 ### Releasing
 
-All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.2`). The desktop
+All three packages share one version, set by `<Version>` in each library `.csproj` (currently `0.6.3`). The desktop
 app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialPoster.MAUI.csproj`; keep it the same.
 
 - **Try a build in another app first:** `scripts/publish-local.ps1` runs the tests, then packs Posting, Core and
