@@ -35,7 +35,8 @@
                 </MudText>
 
                 <div class="d-flex align-center gap-2 mt-4">
-                    <MudTextField T="string" @bind-Value="sourceUrl" @bind-Value:after="SaveSourceUrlAsync" Immediate="true" Label="Draft from a link"
+                    <MudTextField T="string" @bind-Value="sourceUrl" @bind-Value:after="SaveSourceUrlAsync"
+                                  Immediate="true" Label="Draft from a link"
                                   Placeholder="https://example.com/article"
                                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1"
                                   Disabled="@generatingPost"/>
@@ -255,51 +256,63 @@
                                  PrepareSubmission="PrepareSubmissionAsync"/>
             }
             <MudStack Spacing="2">
-            @foreach (var row in drafts)
-            {
-                var rowConnected = status?.IsConnected(row.Platform) == true;
-                var rowPublishing = row.Selected && rowConnected;
-                var rowRendered = Render(row);
-                var rowOver = rowRendered.IsOverLimit;
-                <MudPaper Class="@($"sp-card platform-{row.Platform.ToString().ToLowerInvariant()}")"
-                          Style="@(rowOver ? "border:2px solid var(--mud-palette-error)" : rowPublishing ? null : "opacity:.6")"
-                          Elevation="0">
-                    <div class="sp-card-header">
-                        <span class="platform-icon">@PlatformInfo.Icon(row.Platform)</span>
-                        <MudText Typo="Typo.h6" Color="@(rowOver ? Color.Error : Color.Default)">@PlatformInfo.Label(row.Platform)</MudText>
-                        @if (rowOver)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">
-                                Too long: @rowRendered.Length / @rowRendered.Limit
-                            </MudChip>
-                        }
-                        @if (status is not null && !rowConnected)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                     Href="@SocialPosterNavigation.Link("settings")">Not connected: copy only
-                            </MudChip>
-                        }
-                        else if (!row.Selected)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                     Icon="@Icons.Material.Filled.VisibilityOff">Not publishing
-                            </MudChip>
-                        }
-                        <MudSwitch T="bool" Class="ms-auto" Value="@rowPublishing"
-                                   ValueChanged="@(async (bool v) =>
-                                                   {
-                                                       row.Selected = v;
-                                                       await SaveDraftAsync();
-                                                   })"
-                                   Disabled="@(!rowConnected || generatingPost)" Color="Color.Primary"
-                                   Label="Publish"/>
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                   StartIcon="@Icons.Material.Outlined.Edit"
-                                   OnClick="() => OpenEditor(row)">Edit
+                @if (ConnectedDrafts.Any())
+                {
+                    <div class="d-flex align-center">
+                        <div class="sp-section-label">Platforms</div>
+                        <MudButton Class="ms-auto" Size="Size.Small" Variant="Variant.Outlined"
+                                   StartIcon="@(AllConnectedSelected ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                   Disabled="@(generatingPost || publishing)"
+                                   OnClick="ToggleAllAsync">@(AllConnectedSelected ? "Disable all" : "Enable all")
                         </MudButton>
                     </div>
-                </MudPaper>
-            }
+                }
+                @foreach (var row in drafts)
+                {
+                    var rowConnected = status?.IsConnected(row.Platform) == true;
+                    var rowPublishing = row.Selected && rowConnected;
+                    var rowRendered = Render(row);
+                    var rowOver = rowRendered.IsOverLimit;
+                    <MudPaper Class="@($"sp-card platform-{row.Platform.ToString().ToLowerInvariant()}")"
+                              Style="@(rowOver ? "border:2px solid var(--mud-palette-error)" : rowPublishing ? null : "opacity:.6")"
+                              Elevation="0">
+                        <div class="sp-card-header">
+                            <span class="platform-icon">@PlatformInfo.Icon(row.Platform)</span>
+                            <MudText Typo="Typo.h6"
+                                     Color="@(rowOver ? Color.Error : Color.Default)">@PlatformInfo.Label(row.Platform)</MudText>
+                            @if (rowOver)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">
+                                    Too long: @rowRendered.Length / @rowRendered.Limit
+                                </MudChip>
+                            }
+                            @if (status is not null && !rowConnected)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Href="@SocialPosterNavigation.Link("settings")">Not connected: copy only
+                                </MudChip>
+                            }
+                            else if (!row.Selected)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Icon="@Icons.Material.Filled.VisibilityOff">Not publishing
+                                </MudChip>
+                            }
+                            <MudSwitch T="bool" Class="ms-auto" Value="@rowPublishing"
+                                       ValueChanged="@(async (bool v) =>
+                                                     {
+                                                         row.Selected = v;
+                                                         await SaveDraftAsync();
+                                                     })"
+                                       Disabled="@(!rowConnected || generatingPost)" Color="Color.Primary"
+                                       Label="Publish"/>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Outlined.Edit"
+                                       OnClick="() => OpenEditor(row)">Edit
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
             </MudStack>
         </MudStack>
     </MudItem>
@@ -312,113 +325,113 @@
         {
             var rendered = Render(d);
             var connected = status?.IsConnected(d.Platform) == true;
-                    <MudPaper Class="@($"sp-card platform-{d.Platform.ToString().ToLowerInvariant()}")" Elevation="0">
-                        <div class="sp-card-header">
-                            <span class="platform-icon">@PlatformInfo.Icon(d.Platform)</span>
-                            <MudText Typo="Typo.h6">@PlatformInfo.Label(d.Platform)</MudText>
-                            @if (status is not null && !connected)
-                            {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                         Href="@SocialPosterNavigation.Link("settings")">Not connected: copy only
-                                </MudChip>
-                            }
-                            @if (d.Override is not null)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
-                                    Customized
-                                </MudChip>
-                            }
-                            <MudText Typo="Typo.body2" Class="ms-auto fw-semibold"
-                                     Color="@(rendered.IsOverLimit ? Color.Error : Color.Secondary)">
-                                @rendered.Length / @rendered.Limit
-                            </MudText>
-                        </div>
-                        <MudProgressLinear
-                            Value="@(Math.Min(100.0, 100.0 * rendered.Length / Math.Max(1, rendered.Limit)))"
-                            Size="Size.Small"
-                            Color="@(rendered.IsOverLimit ? Color.Error : rendered.Length > rendered.Limit * 0.9 ? Color.Warning : Color.Primary)"/>
-                        <div class="sp-card-body">
-                            @if (d.Override is not null)
-                            {
-                                <div class="mention-host mb-3">
+            <MudPaper Class="@($"sp-card platform-{d.Platform.ToString().ToLowerInvariant()}")" Elevation="0">
+                <div class="sp-card-header">
+                    <span class="platform-icon">@PlatformInfo.Icon(d.Platform)</span>
+                    <MudText Typo="Typo.h6">@PlatformInfo.Label(d.Platform)</MudText>
+                    @if (status is not null && !connected)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                 Href="@SocialPosterNavigation.Link("settings")">Not connected: copy only
+                        </MudChip>
+                    }
+                    @if (d.Override is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                            Customized
+                        </MudChip>
+                    }
+                    <MudText Typo="Typo.body2" Class="ms-auto fw-semibold"
+                             Color="@(rendered.IsOverLimit ? Color.Error : Color.Secondary)">
+                        @rendered.Length / @rendered.Limit
+                    </MudText>
+                </div>
+                <MudProgressLinear
+                    Value="@(Math.Min(100.0, 100.0 * rendered.Length / Math.Max(1, rendered.Limit)))"
+                    Size="Size.Small"
+                    Color="@(rendered.IsOverLimit ? Color.Error : rendered.Length > rendered.Limit * 0.9 ? Color.Warning : Color.Primary)"/>
+                <div class="sp-card-body">
+                    @if (d.Override is not null)
+                    {
+                        <div class="mention-host mb-3">
                                 <textarea id="@d.EditorId" class="composer" rows="4"
                                           aria-label="@($"{PlatformInfo.Label(d.Platform)} text")"
                                           @bind="d.Override" @bind:event="oninput"
                                           @bind:after="OnTemplatesChanged"></textarea>
-                                    @if (activeEditor == d.EditorId)
-                                    {
-                                        @MentionPopup
-                                    }
-                                </div>
-                            }
-
-                            <div class="preview">@if (rendered.IsEmpty)
-                                {
-                                    <span style="opacity:.5">Preview appears here</span>
-                                }
-                                else
-                                {
-                                    @rendered.DisplayText
-                                }
-                            </div>
-
-                            @foreach (var w in rendered.Warnings.Distinct())
+                            @if (activeEditor == d.EditorId)
                             {
-                                <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true"
-                                          Class="mt-1 pa-0">@w</MudAlert>
-                            }
-
-                            @if (media.Count > 0)
-                            {
-                                @foreach (var e in MediaRules.Validate(d.Platform, media))
-                                {
-                                    <MudAlert Severity="Severity.Error" Variant="Variant.Text" Dense="true"
-                                              Class="mt-1 pa-0">@e</MudAlert>
-                                }
-
-                                @if (d.Platform == Platform.X && xIntent && connected)
-                                {
-                                    <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true"
-                                              Class="mt-1 pa-0">X's browser composer can't receive files. Attach your
-                                        media there before clicking Post.
-                                    </MudAlert>
-                                }
-
-                                <MudText Typo="Typo.caption" Color="Color.Secondary"
-                                         Class="d-block mt-1">@MediaRules.Hint(d.Platform)</MudText>
-                            }
-
-                            <div class="d-flex align-center gap-2 mt-3 flex-wrap">
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined"
-                                           OnClick="() => CopyAsync(d, rendered)" Disabled="@rendered.IsEmpty"
-                                           StartIcon="@(d.Copied ? Icons.Material.Filled.Check : Icons.Material.Outlined.ContentCopy)">
-                                    @(d.Copied ? "Copied" : "Copy text")
-                                </MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Text"
-                                           OnClick="() => ToggleDraftTextAsync(d)"
-                                           StartIcon="@(d.Override is null ? Icons.Material.Outlined.Tune : Icons.Material.Filled.Undo)">
-                                    @(d.Override is null
-                                        ? d.CustomizedText is null ? $"Customize for {PlatformInfo.Label(d.Platform)}" : $"Use {PlatformInfo.Label(d.Platform)} text"
-                                        : "Use shared text")
-                                </MudButton>
-                            </div>
-                            @if (d.Platform == Platform.LinkedIn)
-                            {
-                                @if (ManualLinkedInTags.Count > 0)
-                                {
-                                    <div class="mt-3">
-                                        <MudText Typo="Typo.subtitle2">Tag by hand after posting</MudText>
-                                        @LinkedInChecklist
-                                    </div>
-                                }
-
-                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">Copied text
-                                    uses plain names. Publish tags contacts that have a LinkedIn URN (usually company
-                                    pages).
-                                </MudText>
+                                @MentionPopup
                             }
                         </div>
-                    </MudPaper>
+                    }
+
+                    <div class="preview">@if (rendered.IsEmpty)
+                        {
+                            <span style="opacity:.5">Preview appears here</span>
+                        }
+                        else
+                        {
+                            @rendered.DisplayText
+                        }
+                    </div>
+
+                    @foreach (var w in rendered.Warnings.Distinct())
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true"
+                                  Class="mt-1 pa-0">@w</MudAlert>
+                    }
+
+                    @if (media.Count > 0)
+                    {
+                        @foreach (var e in MediaRules.Validate(d.Platform, media))
+                        {
+                            <MudAlert Severity="Severity.Error" Variant="Variant.Text" Dense="true"
+                                      Class="mt-1 pa-0">@e</MudAlert>
+                        }
+
+                        @if (d.Platform == Platform.X && xIntent && connected)
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Text" Dense="true"
+                                      Class="mt-1 pa-0">X's browser composer can't receive files. Attach your
+                                media there before clicking Post.
+                            </MudAlert>
+                        }
+
+                        <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                 Class="d-block mt-1">@MediaRules.Hint(d.Platform)</MudText>
+                    }
+
+                    <div class="d-flex align-center gap-2 mt-3 flex-wrap">
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                   OnClick="() => CopyAsync(d, rendered)" Disabled="@rendered.IsEmpty"
+                                   StartIcon="@(d.Copied ? Icons.Material.Filled.Check : Icons.Material.Outlined.ContentCopy)">
+                            @(d.Copied ? "Copied" : "Copy text")
+                        </MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text"
+                                   OnClick="() => ToggleDraftTextAsync(d)"
+                                   StartIcon="@(d.Override is null ? Icons.Material.Outlined.Tune : Icons.Material.Filled.Undo)">
+                            @(d.Override is null
+                                ? d.CustomizedText is null ? $"Customize for {PlatformInfo.Label(d.Platform)}" : $"Use {PlatformInfo.Label(d.Platform)} text"
+                                : "Use shared text")
+                        </MudButton>
+                    </div>
+                    @if (d.Platform == Platform.LinkedIn)
+                    {
+                        @if (ManualLinkedInTags.Count > 0)
+                        {
+                            <div class="mt-3">
+                                <MudText Typo="Typo.subtitle2">Tag by hand after posting</MudText>
+                                @LinkedInChecklist
+                            </div>
+                        }
+
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">Copied text
+                            uses plain names. Publish tags contacts that have a LinkedIn URN (usually company
+                            pages).
+                        </MudText>
+                    }
+                </div>
+            </MudPaper>
         }
     </DialogContent>
     <DialogActions>
@@ -450,7 +463,9 @@
     [Parameter] public IComposerWorkflow? Workflow { get; set; }
 
     /// <summary>Shows the scheduling panel and allows scheduled posts. Defaults to true.</summary>
-    [Parameter] public bool EnableScheduling { get; set; } = true;
+    [Parameter]
+    public bool EnableScheduling { get; set; } = true;
+
     [Parameter] public RenderFragment<Func<Task>>? LinkOptions { get; set; }
 
     private string draftId = Guid.NewGuid().ToString("N");
@@ -613,7 +628,9 @@
         Dictionary<Platform, string?> Overrides,
         Dictionary<Platform, bool> Selected,
         Dictionary<Platform, string?>? CustomizedTexts = null,
-        string? SourceUrl = null, string? DraftId = null, string? WorkflowState = null);
+        string? SourceUrl = null,
+        string? DraftId = null,
+        string? WorkflowState = null);
 
     private void RestoreDraft(string json)
     {
@@ -657,6 +674,7 @@
             draft.Override = template == baseTemplate ? null : template;
             draft.CustomizedText = draft.Override;
         }
+
         await OnTemplatesChanged();
         return prepared;
     }
@@ -665,12 +683,23 @@
 
     private RenderedPost Render(PlatformDraft d) => PostRenderer.Render(d.Platform, TemplateFor(d), key => contactCache.GetValueOrDefault(key));
 
+    private IEnumerable<PlatformDraft> ConnectedDrafts => drafts.Where(d => status?.IsConnected(d.Platform) == true);
+
+    private bool AllConnectedSelected => ConnectedDrafts.All(d => d.Selected);
+
+    private async Task ToggleAllAsync()
+    {
+        var enable = !AllConnectedSelected;
+        foreach (var d in ConnectedDrafts) d.Selected = enable;
+        await SaveDraftAsync();
+    }
+
     private IEnumerable<PlatformDraft> Publishable => drafts.Where(d => d.Selected && status?.IsConnected(d.Platform) == true);
 
     private bool CanPublish => !publishing && !uploading && !generatingPost && Publishable.Any()
                                && Publishable.All(d => !Render(d).IsEmpty
-                                   && (!Render(d).IsOverLimit || Workflow is not null && !string.IsNullOrWhiteSpace(sourceUrl))
-                                   && MediaRules.Validate(d.Platform, media).Count == 0);
+                                                       && (!Render(d).IsOverLimit || Workflow is not null && !string.IsNullOrWhiteSpace(sourceUrl))
+                                                       && MediaRules.Validate(d.Platform, media).Count == 0);
 
     private static readonly string MediaAccept = string.Join(",", MediaRules.AcceptedExtensions);
     private const int MaxFilesPerPick = 20;

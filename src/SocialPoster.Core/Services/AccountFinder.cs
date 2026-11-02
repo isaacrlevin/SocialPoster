@@ -18,7 +18,11 @@ public sealed record AccountSearchRequest(
 
 /// <param name="Model">The model the active provider will use.</param>
 /// <param name="Provider">Display name of the active provider.</param>
-public sealed record AccountFinderSettings(bool Enabled, bool AutoSearch, string Model, string Provider = "GitHub Copilot");
+public sealed record AccountFinderSettings(
+    bool Enabled,
+    bool AutoSearch,
+    string Model,
+    string Provider = "GitHub Copilot");
 
 /// <summary>Result of asking the agent to check whether a specific X or LinkedIn account is real.</summary>
 public sealed record VerifiedAccount(bool Exists, string? Name, string? Reason);
@@ -46,6 +50,7 @@ public sealed class AccountFinder(
     private readonly AgentSettingsStore _agentSettings = new(secrets);
     private readonly Lazy<CopilotAgentBackend> _copilot = new(() => new CopilotAgentBackend(secrets, logger, options));
     private readonly Lazy<SafeWebFetcher> _fetcher = new(() => new SafeWebFetcher());
+
     private readonly Lazy<HttpClient> _searchHttp = new(() =>
     {
         var http = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
@@ -75,13 +80,15 @@ public sealed class AccountFinder(
     /// Checks a provider that hasn't been saved yet: a tiny chat request, then one search if a search service is set.
     /// </summary>
     /// <returns>A one-line summary of what worked.</returns>
-    public async Task<string> TestProviderAsync(AgentProvider provider, SearchSettings search, CancellationToken ct = default)
+    public async Task<string> TestProviderAsync(AgentProvider provider, SearchSettings search,
+        CancellationToken ct = default)
     {
         provider = AgentSettingsStore.Normalize(provider);
         if (AgentSettingsStore.Validate(provider) is { } problem) throw new InvalidOperationException(problem);
         if (search.Kind != SearchKind.None && AgentSettingsStore.Validate(search) is { } searchProblem)
             throw new InvalidOperationException(searchProblem);
-        var backend = new ChatAgentBackend(provider, WebSearch.Create(search, _searchHttp.Value), _fetcher.Value, logger);
+        var backend =
+            new ChatAgentBackend(provider, WebSearch.Create(search, _searchHttp.Value), _fetcher.Value, logger);
         return await backend.TestAsync(ct);
     }
 
@@ -98,7 +105,8 @@ public sealed class AccountFinder(
     /// handed to its report function.
     /// </summary>
     private async Task<(T Result, string Model, string Backend)> RunAsync<T>(
-        Func<TaskCompletionSource<T>, AIFunction> makeReport, string systemPrompt, string userPrompt, bool requiresSearch,
+        Func<TaskCompletionSource<T>, AIFunction> makeReport, string systemPrompt, string userPrompt,
+        bool requiresSearch,
         string noResultMessage, string timeoutMessage, IProgress<string>? progress, CancellationToken ct)
     {
         var settings = await GetSettingsAsync();
@@ -147,7 +155,8 @@ public sealed class AccountFinder(
 
         logger.LogDebug("Account finder reported for {Name}: {Json}", request.Name,
             System.Text.Json.JsonSerializer.Serialize(reported));
-        return (AccountCandidates.Normalize(reported).Where(c => request.Platforms.Contains(c.Platform)).ToList(), model);
+        return (AccountCandidates.Normalize(reported).Where(c => request.Platforms.Contains(c.Platform)).ToList(),
+            model);
     }
 
     /// <summary>
@@ -207,7 +216,8 @@ public sealed class AccountFinder(
                     // Models can't count characters reliably, so check here and let the model fix its own drafts
                     // rather than failing the whole generation over one long post.
                     var (_, problems) = CheckPosts(posts, platforms, uri);
-                    logger.LogDebug("report_posts attempt {Attempt} for {Url}: {Json} Problems: {Problems}", attempts + 1, uri,
+                    logger.LogDebug("report_posts attempt {Attempt} for {Url}: {Json} Problems: {Problems}",
+                        attempts + 1, uri,
                         System.Text.Json.JsonSerializer.Serialize(posts), problems);
                     if (problems.Count > 0 && ++attempts < MaxPostAttempts)
                         return "Not recorded. Fix these problems and call report_posts again with every post:\n- " +
@@ -229,9 +239,49 @@ public sealed class AccountFinder(
 
         var (result, problems) = CheckPosts(posts, platforms, uri);
         if (problems.Count > 0)
+        {
+            // The model kept going over a limit; trim the long drafts ourselves rather than failing the generation.
+            var fitted = (posts ?? []).Select(p => p with { Text = FitToLimit(p, platforms, uri) }).ToArray();
+            (result, problems) = CheckPosts(fitted, platforms, uri);
+        }
+
+        if (problems.Count > 0)
             throw new InvalidOperationException(
                 $"{backend} couldn't produce valid drafts after {MaxPostAttempts} tries: {problems[0]} Try generating again.");
         return result;
+    }
+
+    /// <summary>Drops trailing words (hashtags first, then the lead-in) until the post fits, always keeping the source URL.</summary>
+    internal static string FitToLimit(ReportedPost post, IReadOnlyList<Platform> platforms, Uri uri)
+    {
+        var text = post.Text?.Trim() ?? "";
+        var url = uri.ToString();
+        var at = text.IndexOf(url, StringComparison.OrdinalIgnoreCase);
+        if (at < 0) return text;
+        var targets = Enum.TryParse<Platform>(post.Platform, true, out var p) && platforms.Contains(p)
+            ? new[] { p }
+            : platforms.Distinct().ToArray();
+        var before = text[..at].TrimEnd();
+        var after = text[(at + url.Length)..].Trim();
+
+        bool Fits() => targets.All(t => !PostRenderer.Render(t, Compose(before, url, after), _ => null).IsOverLimit);
+
+        static string Compose(string b, string u, string a) =>
+            string.Join(" ", new[] { b, u, a }.Where(s => s.Length > 0));
+
+        static string DropLastWord(string s)
+        {
+            var i = s.LastIndexOfAny([' ', '\n', '\t']);
+            return i < 0 ? "" : s[..i].TrimEnd();
+        }
+
+        while (!Fits() && (after.Length > 0 || before.Length > 0))
+        {
+            if (after.Length > 0) after = DropLastWord(after);
+            else before = DropLastWord(before);
+        }
+
+        return Compose(before, url, after);
     }
 
     /// <summary>How many times the model may call report_posts before its last answer is taken as final.</summary>
@@ -278,14 +328,16 @@ public sealed class AccountFinder(
             }
         }
 
-        var missing = platforms.Distinct().Where(p => result.All(r => r.Platform != p)).Select(p => p.ToString()).ToList();
+        var missing = platforms.Distinct().Where(p => result.All(r => r.Platform != p)).Select(p => p.ToString())
+            .ToList();
         if (!hasShared) missing.Insert(0, "Shared");
         if (missing.Count > 0) problems.Add($"Missing posts for: {string.Join(", ", missing)}.");
         return (result, problems);
     }
 
     /// <summary>Characters the source URL uses on a platform, which differs because each one counts links its own way.</summary>
-    private static int UrlCost(Platform platform, Uri uri) => PostRenderer.Render(platform, uri.ToString(), _ => null).Length;
+    private static int UrlCost(Platform platform, Uri uri) =>
+        PostRenderer.Render(platform, uri.ToString(), _ => null).Length;
 
     /// <summary>
     /// What to ask the model for besides the URL: the real room left, minus a margin, because models undercount.
@@ -307,8 +359,9 @@ public sealed class AccountFinder(
             Platform.Threads => "counts every character, including the full link",
             _ => "",
         };
-        return $"{platform}: {Limit(platform)}-character limit ({rules}). The source URL uses {UrlCost(platform, uri)}, " +
-               $"so write at most {TargetLength(platform, uri)} characters besides it.";
+        return
+            $"{platform}: {Limit(platform)}-character limit ({rules}). The source URL uses {UrlCost(platform, uri)}, " +
+            $"so write at most {TargetLength(platform, uri)} characters besides it.";
     }
 
     private static int Limit(Platform platform) => platform switch
