@@ -24,12 +24,12 @@ public static class SocialPosterServiceCollectionExtensions
         var options = services.AddOptions<SocialPosterOptions>()
             .Validate(o => !string.IsNullOrWhiteSpace(o.DataDirectory), "DataDirectory must not be empty.")
             .Validate(o => !string.IsNullOrWhiteSpace(o.DatabaseFileName)
-                && o.DatabaseFileName == Path.GetFileName(o.DatabaseFileName)
-                && o.DatabaseFileName is not "." and not ".."
-                && o.DatabaseFileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0,
+                           && o.DatabaseFileName == Path.GetFileName(o.DatabaseFileName)
+                           && o.DatabaseFileName is not "." and not ".."
+                           && o.DatabaseFileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0,
                 "DatabaseFileName must be a file name, not a path.")
             .Validate(o => o.PostingTimeout > TimeSpan.Zero
-                && o.PostingTimeout.TotalMilliseconds <= int.MaxValue,
+                           && o.PostingTimeout.TotalMilliseconds <= int.MaxValue,
                 "PostingTimeout must be positive and within HttpClient's supported range.")
             .ValidateOnStart();
         if (configure is not null) options.Configure(configure);
@@ -46,11 +46,13 @@ public static class SocialPosterServiceCollectionExtensions
             db.UseSqlite(connection.ToString());
         });
         services.AddSingleton<SecretStore>();
+        services.AddSingleton<SocialPoster.Core.Scheduling.SchedulerSettings>();
         // The platform clients read credentials through ICredentialStore; here that is the encrypted local store.
         services.AddSingleton<ICredentialStore>(sp => sp.GetRequiredService<SecretStore>());
         services.AddSocialPosting();
         services.AddOptions<SocialPostingOptions>()
-            .Configure<IOptions<SocialPosterOptions>>((posting, core) => posting.PostingTimeout = core.Value.PostingTimeout);
+            .Configure<IOptions<SocialPosterOptions>>((posting, core) =>
+                posting.PostingTimeout = core.Value.PostingTimeout);
         services.AddScoped<ContactService>();
         services.AddScoped<PublishService>();
         services.AddSingleton<AgentSettingsStore>();
@@ -77,8 +79,10 @@ public static class SocialPosterServiceCollectionExtensions
         {
             Directory.CreateDirectory(directory);
             if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                File.SetUnixFileMode(directory,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
+
         var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await db.Database.EnsureCreatedAsync(cancellationToken);

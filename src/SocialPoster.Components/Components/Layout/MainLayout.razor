@@ -1,27 +1,32 @@
 @inherits LayoutComponentBase
 @inject IJSRuntime JS
 
-<MudThemeProvider @ref="themeProvider" Theme="AppTheme.Theme" @bind-IsDarkMode="isDark" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+<MudThemeProvider @ref="themeProvider" Theme="AppTheme.Theme" @bind-IsDarkMode="isDark"/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
 
 <MudLayout>
     <MudAppBar Elevation="0" Class="sp-appbar">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="() => drawerOpen = !drawerOpen" aria-label="Toggle navigation" />
-        <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Default" Style="opacity:.7">One post. Your platforms. Mentions that actually work.</MudText>
-        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="() => drawerOpen = !drawerOpen" aria-label="Toggle navigation"/>
+        <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Default" Style="opacity:.7">One post. Your
+            platforms. Mentions that actually work.
+        </MudText>
+        <MudSpacer/>
         <MudTooltip Text="@(isDark ? "Switch to light mode" : "Switch to dark mode")">
-            <MudIconButton Icon="@(isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="ToggleThemeAsync" aria-label="Toggle dark mode" />
+            <MudIconButton Icon="@(isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit" OnClick="ToggleThemeAsync" aria-label="Toggle dark mode"/>
         </MudTooltip>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="drawerOpen" Elevation="0" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Class="sp-drawer">
-        <NavMenu />
+    <MudDrawer @bind-Open="drawerOpen" Elevation="0" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md"
+               Class="sp-drawer">
+        <NavMenu/>
     </MudDrawer>
 
     <MudMainContent Class="sp-main">
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6 pl-6 pr-10">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -52,4 +57,5 @@
         isDark = !isDark;
         await JS.InvokeVoidAsync("socialPoster.setTheme", isDark ? "dark" : "light");
     }
+
 }

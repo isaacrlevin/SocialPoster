@@ -5,11 +5,12 @@
 @inject LinkedInClient LinkedInApi
 @inject MastodonClient MastodonApi
 @inject ThreadsClient ThreadsApi
+@inject SchedulerSettings SchedulerSwitch
 @inherits PlatformComponent
 
 <PageTitle>Accounts · SocialPoster</PageTitle>
 
-<PageHeader Title="Accounts" Subtitle="Connect the platforms you want to publish to." />
+<PageHeader Title="Accounts" Subtitle="Connect the platforms you want to publish to."/>
 
 <MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
     <MudText Typo="Typo.h6">Selected platforms</MudText>
@@ -22,14 +23,28 @@
         {
             <MudSwitch T="bool" Value="@EnabledPlatforms.Contains(platform)"
                        ValueChanged="@(enabled => SetPlatformAsync(platform, enabled))"
-                       Disabled="@busy" Color="Color.Primary" Label="@PlatformInfo.Label(platform)" />
+                       Disabled="@busy" Color="Color.Primary" Label="@PlatformInfo.Label(platform)"/>
         }
     </div>
     @if (EnabledPlatforms.Platforms.Count == 0)
     {
-        <MudText Typo="Typo.body2" Color="Color.Secondary">No platforms selected. Enable a platform above to configure it.</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No platforms selected. Enable a platform above to configure
+            it.
+        </MudText>
     }
-    <Feedback Text="@platformMsg" IsError="@platformErr" />
+    <Feedback Text="@platformMsg" IsError="@platformErr"/>
+</MudPaper>
+
+<MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
+    <MudText Typo="Typo.h6">Scheduler</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        When off, scheduled posts are not published and the scheduling panel is hidden on Compose.
+        Posts already scheduled are kept and resume publishing when you turn the scheduler back on
+        (posts that come due while it's off may then be treated as late).
+    </MudText>
+    <MudSwitch T="bool" Value="@schedulerEnabled" ValueChanged="@SetSchedulerAsync"
+               Disabled="@busy" Color="Color.Primary" Label="Enable scheduler"/>
+    <Feedback Text="@schedulerMsg" IsError="@schedulerErr"/>
 </MudPaper>
 
 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Lock" Class="mb-6">
@@ -47,27 +62,40 @@
                         <div class="sp-account-title">
                             <span class="platform-icon" style="background:#1185fe">🦋</span>
                             <MudText Typo="Typo.h6">Bluesky</MudText>
-                            <StatusBadge Ok="@bskyOk" />
+                            <StatusBadge Ok="@bskyOk"/>
                         </div>
                     </TitleContent>
                     <ChildContent>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
                             Search and follows sync work without logging in. To publish, create an
-                            <MudLink Href="https://bsky.app/settings/app-passwords" Target="_blank">app password</MudLink>.
+                            <MudLink Href="https://bsky.app/settings/app-passwords" Target="_blank">app password
+                            </MudLink>
+                            .
                         </MudText>
                         <MudStack Spacing="2">
-                            <MudTextField T="string" Immediate="true" @bind-Value="bskyHandle" Label="Your handle" Placeholder="you.bsky.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="bskyPassword" Label="App password" InputType="InputType.Password" Placeholder="@(bskyHasPassword ? "•••• saved" : "xxxx-xxxx-xxxx-xxxx")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudTextField T="string" Immediate="true" @bind-Value="bskyHandle" Label="Your handle"
+                                          Placeholder="you.bsky.social" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="bskyPassword" Label="App password"
+                                          InputType="InputType.Password"
+                                          Placeholder="@(bskyHasPassword ? "•••• saved" : "xxxx-xxxx-xxxx-xxxx")"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
                             <MudExpansionPanels Elevation="0" Class="sp-advanced">
                                 <MudExpansionPanel Text="Advanced" Dense="true">
-                                    <MudTextField T="string" Immediate="true" @bind-Value="bskyService" Label="PDS / service URL" Placeholder="https://bsky.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    <MudTextField T="string" Immediate="true" @bind-Value="bskyService"
+                                                  Label="PDS / service URL" Placeholder="https://bsky.social"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense"/>
                                 </MudExpansionPanel>
                             </MudExpansionPanels>
                         </MudStack>
-                        <Feedback Text="@bskyMsg" IsError="@bskyErr" />
+                        <Feedback Text="@bskyMsg" IsError="@bskyErr"/>
                         <div class="sp-account-actions">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveBlueskyAsync" Disabled="@busy">Save</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestBlueskyAsync" Disabled="@busy">Test login</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="SaveBlueskyAsync" Disabled="@busy">Save
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestBlueskyAsync"
+                                       Disabled="@busy">Test login
+                            </MudButton>
                         </div>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -83,27 +111,54 @@
                         <div class="sp-account-title">
                             <span class="platform-icon" style="background:#111">𝕏</span>
                             <MudText Typo="Typo.h6">X</MudText>
-                            <StatusBadge Ok="@(xOk || xUseIntent)" />
+                            <StatusBadge Ok="@(xOk || xUseIntent)"/>
                         </div>
                     </TitleContent>
                     <ChildContent>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                            Create an app in the <MudLink Href="https://developer.x.com/en/portal/dashboard" Target="_blank">X developer portal</MudLink> with <em>Read and write</em> permissions,
-                            then generate an Access Token and Secret for your account. Posts and lookups count toward your X API plan.
+                            Create an app in the
+                            <MudLink Href="https://developer.x.com/en/portal/dashboard" Target="_blank">X developer
+                                portal
+                            </MudLink>
+                            with <em>Read and write</em> permissions,
+                            then generate an Access Token and Secret for your account. Posts and lookups count toward
+                            your X API plan.
                         </MudText>
                         <MudStack Spacing="2">
-                            <MudTextField T="string" Immediate="true" @bind-Value="xConsumerKey" Label="API Key (consumer key)" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[0])" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="xConsumerSecret" Label="API Key Secret" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[1])" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="xAccessToken" Label="Access Token" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[2])" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="xAccessSecret" Label="Access Token Secret" Disabled="@xUseIntent" InputType="InputType.Password" Placeholder="@Placeholder(xHas[3])" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudTextField T="string" Immediate="true" @bind-Value="xConsumerKey"
+                                          Label="API Key (consumer key)" Disabled="@xUseIntent"
+                                          InputType="InputType.Password" Placeholder="@Placeholder(xHas[0])"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="xConsumerSecret"
+                                          Label="API Key Secret" Disabled="@xUseIntent" InputType="InputType.Password"
+                                          Placeholder="@Placeholder(xHas[1])" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="xAccessToken" Label="Access Token"
+                                          Disabled="@xUseIntent" InputType="InputType.Password"
+                                          Placeholder="@Placeholder(xHas[2])" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="xAccessSecret"
+                                          Label="Access Token Secret" Disabled="@xUseIntent"
+                                          InputType="InputType.Password" Placeholder="@Placeholder(xHas[3])"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
                         </MudStack>
-                        <MudSwitch T="bool" @bind-Value="xUseIntent" Color="Color.Primary" Class="mt-2" Label="Post via browser instead (free, no API access needed)" />
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Opens x.com with your post pre-filled; you click Post yourself there. Skips the X API entirely, so credentials above aren't required for posting (they're still used to Verify accounts).</MudText>
-                        <Feedback Text="@xMsg" IsError="@xErr" />
+                        <MudSwitch T="bool" @bind-Value="xUseIntent" Color="Color.Primary" Class="mt-2"
+                                   Label="Post via browser instead (free, no API access needed)"/>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Opens x.com with your post pre-filled; you
+                            click Post yourself there. Skips the X API entirely, so credentials above aren't required
+                            for posting (they're still used to Verify accounts).
+                        </MudText>
+                        <Feedback Text="@xMsg" IsError="@xErr"/>
                         <div class="sp-account-actions">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveXAsync" Disabled="@busy">Save</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestXAsync" Disabled="@busy">Test</MudButton>
-                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ClearXAsync" Disabled="@busy">Remove</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="SaveXAsync" Disabled="@busy">Save
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestXAsync"
+                                       Disabled="@busy">Test
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto"
+                                       OnClick="ClearXAsync" Disabled="@busy">Remove
+                            </MudButton>
                         </div>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -119,27 +174,38 @@
                         <div class="sp-account-title">
                             <span class="platform-icon" style="background:#0a66c2">in</span>
                             <MudText Typo="Typo.h6">LinkedIn</MudText>
-                            <StatusBadge Ok="@liOk" />
+                            <StatusBadge Ok="@liOk"/>
                         </div>
                     </TitleContent>
                     <ChildContent>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                            Paste an existing access token with <code>openid</code>, <code>profile</code>, and <code>w_member_social</code> permissions.
+                            Paste an existing access token with <code>openid</code>, <code>profile</code>, and <code>w_member_social</code>
+                            permissions.
                             SocialPoster uses this token as-is and does not generate or revoke LinkedIn tokens.
                         </MudText>
                         <MudStack Spacing="2">
-                            <MudTextField T="string" Immediate="true" @bind-Value="liAccessToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(liHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="liVersion" Label="API version (YYYYMM)" Placeholder="@LinkedInClient.DefaultApiVersion" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudTextField T="string" Immediate="true" @bind-Value="liAccessToken" Label="Access token"
+                                          InputType="InputType.Password" Placeholder="@Placeholder(liHasToken)"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="liVersion"
+                                          Label="API version (YYYYMM)" Placeholder="@LinkedInClient.DefaultApiVersion"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
                         </MudStack>
                         @if (liName is not null)
                         {
                             <MudText Typo="Typo.body2" Class="mt-2">Connected as <strong>@liName</strong></MudText>
                         }
-                        <Feedback Text="@liMsg" IsError="@liErr" />
+                        <Feedback Text="@liMsg" IsError="@liErr"/>
                         <div class="sp-account-actions">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveLinkedInAsync" Disabled="@busy">Save</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestLinkedInAsync" Disabled="@busy">Verify token</MudButton>
-                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ForgetLinkedInAsync" Disabled="@busy">Forget token</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="SaveLinkedInAsync" Disabled="@busy">Save
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestLinkedInAsync"
+                                       Disabled="@busy">Verify token
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto"
+                                       OnClick="ForgetLinkedInAsync" Disabled="@busy">Forget token
+                            </MudButton>
                         </div>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -155,24 +221,36 @@
                         <div class="sp-account-title">
                             <span class="platform-icon" style="background:#6364ff">Ⓜ</span>
                             <MudText Typo="Typo.h6">Mastodon</MudText>
-                            <StatusBadge Ok="@mastodonOk" />
+                            <StatusBadge Ok="@mastodonOk"/>
                         </div>
                     </TitleContent>
                     <ChildContent>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                            On your own instance, open Preferences → Development, create an application and copy its access token.
+                            On your own instance, open Preferences → Development, create an application and copy its
+                            access token.
                             Grant read:accounts, read:search, write:statuses and write:media. Posts are public.
-                            Use your account's home server, not a profile URL. A different instance requires its own token.
+                            Use your account's home server, not a profile URL. A different instance requires its own
+                            token.
                         </MudText>
                         <MudStack Spacing="2">
-                            <MudTextField T="string" Immediate="true" @bind-Value="mastodonInstance" Label="Instance URL" Placeholder="https://mastodon.social" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            <MudTextField T="string" Immediate="true" @bind-Value="mastodonToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(mastodonHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudTextField T="string" Immediate="true" @bind-Value="mastodonInstance"
+                                          Label="Instance URL" Placeholder="https://mastodon.social"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                            <MudTextField T="string" Immediate="true" @bind-Value="mastodonToken" Label="Access token"
+                                          InputType="InputType.Password" Placeholder="@Placeholder(mastodonHasToken)"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"/>
                         </MudStack>
-                        <Feedback Text="@mastodonMsg" IsError="@mastodonErr" />
+                        <Feedback Text="@mastodonMsg" IsError="@mastodonErr"/>
                         <div class="sp-account-actions">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveMastodonAsync" Disabled="@busy">Save and verify</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestMastodonAsync" Disabled="@busy">Test connection</MudButton>
-                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ForgetMastodonAsync" Disabled="@busy">Forget token</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="SaveMastodonAsync" Disabled="@busy">Save and verify
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestMastodonAsync"
+                                       Disabled="@busy">Test connection
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto"
+                                       OnClick="ForgetMastodonAsync" Disabled="@busy">Forget token
+                            </MudButton>
                         </div>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -188,25 +266,39 @@
                         <div class="sp-account-title">
                             <span class="platform-icon" style="background:#000">@@</span>
                             <MudText Typo="Typo.h6">Threads</MudText>
-                            <StatusBadge Ok="@threadsOk" />
+                            <StatusBadge Ok="@threadsOk"/>
                         </div>
                     </TitleContent>
                     <ChildContent>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                            Create an app in the <MudLink Href="https://developers.facebook.com/apps" Target="_blank">Meta developer portal</MudLink> with the Threads API,
-                            add your account as a Threads tester, and generate a user access token with <code>threads_basic</code> and
-                            <code>threads_content_publish</code>. Posts are text only: the Threads API can't take uploaded media.
+                            Create an app in the
+                            <MudLink Href="https://developers.facebook.com/apps" Target="_blank">Meta developer portal
+                            </MudLink>
+                            with the Threads API,
+                            add your account as a Threads tester, and generate a user access token with <code>threads_basic</code>
+                            and
+                            <code>threads_content_publish</code>. Posts are text only: the Threads API can't take
+                            uploaded media.
                         </MudText>
-                        <MudTextField T="string" Immediate="true" @bind-Value="threadsToken" Label="Access token" InputType="InputType.Password" Placeholder="@Placeholder(threadsHasToken)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudTextField T="string" Immediate="true" @bind-Value="threadsToken" Label="Access token"
+                                      InputType="InputType.Password" Placeholder="@Placeholder(threadsHasToken)"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"/>
                         @if (threadsUsername is not null)
                         {
-                            <MudText Typo="Typo.body2" Class="mt-2">Connected as <strong>@@@threadsUsername</strong></MudText>
+                            <MudText Typo="Typo.body2" Class="mt-2">Connected as <strong>@@@threadsUsername</strong>
+                            </MudText>
                         }
-                        <Feedback Text="@threadsMsg" IsError="@threadsErr" />
+                        <Feedback Text="@threadsMsg" IsError="@threadsErr"/>
                         <div class="sp-account-actions">
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="SaveThreadsAsync" Disabled="@busy">Save and verify</MudButton>
-                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestThreadsAsync" Disabled="@busy">Test connection</MudButton>
-                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto" OnClick="ForgetThreadsAsync" Disabled="@busy">Forget token</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="SaveThreadsAsync" Disabled="@busy">Save and verify
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="TestThreadsAsync"
+                                       Disabled="@busy">Test connection
+                            </MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="ms-auto"
+                                       OnClick="ForgetThreadsAsync" Disabled="@busy">Forget token
+                            </MudButton>
                         </div>
                     </ChildContent>
                 </MudExpansionPanel>
@@ -217,13 +309,44 @@
 
 @if (EnabledPlatforms.Searchable.Count > 0)
 {
-    <AgentSettingsCard PlatformNames="@SearchablePlatformNames" />
+    <AgentSettingsCard PlatformNames="@SearchablePlatformNames"/>
 }
 
 @code {
     private bool busy;
     private string? platformMsg;
     private bool platformErr;
+    private bool schedulerEnabled = true;
+    private string? schedulerMsg;
+    private bool schedulerErr;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        schedulerEnabled = await SchedulerSwitch.IsEnabledAsync();
+    }
+
+    private async Task SetSchedulerAsync(bool enabled)
+    {
+        busy = true;
+        schedulerMsg = null;
+        try
+        {
+            await SchedulerSwitch.SetEnabledAsync(enabled);
+            schedulerEnabled = enabled;
+            schedulerErr = false;
+            schedulerMsg = enabled ? "Scheduler enabled." : "Scheduler disabled.";
+        }
+        catch (Exception ex) when (ex is Microsoft.EntityFrameworkCore.DbUpdateException or IOException or InvalidOperationException or System.Security.Cryptography.CryptographicException)
+        {
+            schedulerErr = true;
+            schedulerMsg = $"Couldn't update the scheduler setting: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 
     private async Task SetPlatformAsync(Platform platform, bool enabled)
     {
@@ -263,6 +386,7 @@
     private static string Placeholder(bool saved) => saved ? "•••• saved (leave blank to keep)" : "";
 
     private bool loaded;
+
     protected override async Task OnParametersSetAsync()
     {
         if (loaded) return;
@@ -278,11 +402,13 @@
             mastodonHasToken = await Secrets.GetAsync(SettingKeys.MastodonAccessToken) is not null;
             mastodonOk = await MastodonApi.IsConfiguredAsync();
         }
+
         if (AvailablePlatforms.Contains(Platform.Threads))
         {
             threadsHasToken = await Secrets.GetAsync(SettingKeys.ThreadsAccessToken) is not null;
             threadsOk = await ThreadsApi.IsConfiguredAsync();
         }
+
         if (AvailablePlatforms.Contains(Platform.Bluesky))
         {
             if (refreshFields) bskyHandle = await Secrets.GetAsync(SettingKeys.BlueskyHandle);
@@ -313,17 +439,22 @@
         var values = new Dictionary<string, string?>();
         foreach (var (key, value, secret) in fields)
             values[key] = secret && string.IsNullOrWhiteSpace(value)
-                ? await Secrets.GetAsync(key) : string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+                ? await Secrets.GetAsync(key)
+                : string.IsNullOrWhiteSpace(value)
+                    ? null
+                    : value.Trim();
         return values;
     }
 
     private Task<Dictionary<string, string?>> BlueskyValues() => ValuesAsync(
         (SettingKeys.BlueskyHandle, bskyHandle?.Trim().TrimStart('@'), false),
         (SettingKeys.BlueskyService, bskyService, false), (SettingKeys.BlueskyAppPassword, bskyPassword, true));
+
     private Task<Dictionary<string, string?>> XValues() => ValuesAsync(
         (SettingKeys.XConsumerKey, xConsumerKey, true), (SettingKeys.XConsumerSecret, xConsumerSecret, true),
         (SettingKeys.XAccessToken, xAccessToken, true), (SettingKeys.XAccessTokenSecret, xAccessSecret, true),
         (SettingKeys.XPostMethod, xUseIntent ? "intent" : null, false));
+
     private Task<Dictionary<string, string?>> LinkedInValues() => ValuesAsync(
         (SettingKeys.LinkedInAccessToken, liAccessToken, true), (SettingKeys.LinkedInApiVersion, liVersion, false));
 
@@ -428,7 +559,12 @@
 
     private Task TestXAsync() => Run(async () =>
     {
-        if (xUseIntent) { ReportX("Browser posting selected. No API connection is required.", false); return; }
+        if (xUseIntent)
+        {
+            ReportX("Browser posting selected. No API connection is required.", false);
+            return;
+        }
+
         var preview = await Secrets.CreatePreviewAsync(await XValues());
         using var http = HttpClients.CreateClient(nameof(XClient));
         var me = await new XClient(http, preview).GetMeAsync();
@@ -472,4 +608,5 @@
         liHasToken = false;
         ReportLi("Token forgotten in this app only. This does not revoke it; LinkedIn's normal expiration still applies.", false);
     }, ReportLi);
+
 }

@@ -34,8 +34,9 @@ public static class SocialPosterComponentServiceCollectionExtensions
             .Validate(o => o.Platforms is not null && o.Platforms.All(p => Enum.IsDefined(p)),
                 "Platforms must contain only supported platforms.")
             .Validate(o => o.BasePath is not null && (o.BasePath.Length == 0 ||
-                o.BasePath.Split('/').All(segment => segment.Length > 0
-                    && segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))),
+                                                      o.BasePath.Split('/').All(segment => segment.Length > 0
+                                                          && segment.All(c =>
+                                                              char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))),
                 "BasePath must be empty or slash-separated URL segments containing letters, digits, '-' or '_'.")
             .ValidateOnStart();
         if (configure is not null) options.Configure(configure);
@@ -56,7 +57,8 @@ public sealed class SocialPosterNavigation(IOptions<SocialPosterComponentOptions
     public string Link(string? section = null)
     {
         var path = options.Value.BasePath;
-        return string.IsNullOrEmpty(section) ? (path.Length == 0 ? "./" : path)
+        return string.IsNullOrEmpty(section)
+            ? (path.Length == 0 ? "./" : path)
             : (path.Length == 0 ? section : $"{path}/{section}");
     }
 }

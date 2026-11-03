@@ -5,6 +5,7 @@
 @inject AccountFinder Finder
 @inject IJSRuntime JS
 @inject SocialPosterNavigation SocialPosterNavigation
+@inject SchedulerSettings SchedulerSwitch
 @inherits PlatformComponent
 
 <PageTitle>Compose · SocialPoster</PageTitle>
@@ -244,7 +245,7 @@
     @* Right column: the scheduling panel (when enabled) with the platform accounts beneath it. *@
     <MudItem xs="12" md="6">
         <MudStack Spacing="4">
-            @if (EnableScheduling)
+            @if (EnableScheduling && schedulerEnabled)
             {
                 <SchedulingPanel BaseTemplate="@baseTemplate"
                                  Templates="@Publishable.ToDictionary(d => d.Platform, TemplateFor)"
@@ -468,6 +469,7 @@
 
     [Parameter] public RenderFragment<Func<Task>>? LinkOptions { get; set; }
 
+    private bool schedulerEnabled = true;
     private string draftId = Guid.NewGuid().ToString("N");
     private string baseTemplate = "";
     private PlatformStatus? status;
@@ -506,6 +508,7 @@
     protected override async Task OnInitializedAsync()
     {
         finderSettings = await Finder.GetSettingsAsync();
+        schedulerEnabled = await SchedulerSwitch.IsEnabledAsync();
         Searches.Changed += OnSearchChanged;
     }
 

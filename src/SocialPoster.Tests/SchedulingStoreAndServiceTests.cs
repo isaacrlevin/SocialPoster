@@ -71,8 +71,10 @@ public class SchedulingStoreAndServiceTests
         var recovered = (await host.Store.ClaimAsync(host.Clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
         Assert.NotEqual(lease.LeaseToken, recovered.LeaseToken);
         Assert.Equal(lease.Revision + 1, recovered.Revision);
-        Assert.False(await host.Store.ReplaceAsync(recovered, recovered.Revision, lease.LeaseToken, host.Clock.GetUtcNow()));
-        Assert.True(await host.Store.ReplaceAsync(recovered, recovered.Revision, recovered.LeaseToken, host.Clock.GetUtcNow()));
+        Assert.False(await host.Store.ReplaceAsync(recovered, recovered.Revision, lease.LeaseToken,
+            host.Clock.GetUtcNow()));
+        Assert.True(await host.Store.ReplaceAsync(recovered, recovered.Revision, recovered.LeaseToken,
+            host.Clock.GetUtcNow()));
     }
 
     [Fact]
@@ -105,7 +107,8 @@ public class SchedulingStoreAndServiceTests
     public async Task Store_ExpiredLeaseMixedOutcomes_RecoversPendingWithoutRepeatingSuccessfulOrUncertain()
     {
         await using var host = await SchedulingTestHost.CreateAsync();
-        var post = await host.Scheduler.CreateAsync(host.Request("hello", Platform.Bluesky, Platform.X, Platform.LinkedIn));
+        var post = await host.Scheduler.CreateAsync(host.Request("hello", Platform.Bluesky, Platform.X,
+            Platform.LinkedIn));
         host.MakeDue(post);
         var leased = (await host.Store.ClaimAsync(host.Clock.GetUtcNow(), TimeSpan.FromMinutes(2)))!;
         Assert.True(await host.Store.ReplaceAsync(leased with
@@ -123,7 +126,8 @@ public class SchedulingStoreAndServiceTests
         var result = await host.ReadAsync(post.Id);
         Assert.Equal(ScheduleState.Completed, result.State);
         Assert.Equal(DeliveryState.Uncertain, result.Outcomes.Single(o => o.Platform == Platform.X).State);
-        Assert.Equal("https://example.invalid/already-posted", result.Outcomes.Single(o => o.Platform == Platform.Bluesky).Url);
+        Assert.Equal("https://example.invalid/already-posted",
+            result.Outcomes.Single(o => o.Platform == Platform.Bluesky).Url);
         Assert.Equal(Platform.LinkedIn, Assert.Single(host.Publisher.Calls).Platform.Platform);
         Assert.All(result.Outcomes, o => Assert.Equal(1, o.Attempts));
         Assert.Equal(0, await host.Executor.RunDueAsync());
@@ -186,15 +190,21 @@ public class SchedulingStoreAndServiceTests
         await using var host = await SchedulingTestHost.CreateAsync();
         var post = await host.Scheduler.CreateAsync(host.Request());
         var edited = await host.Scheduler.UpdateAsync(post.Id, post.Revision, host.Request("new"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.UpdateAsync(post.Id, post.Revision, host.Request()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.RescheduleAsync(post.Id, post.Revision, host.Request().LocalDateTime, "UTC"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.Scheduler.UpdateAsync(post.Id, post.Revision, host.Request()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.Scheduler.RescheduleAsync(post.Id, post.Revision, host.Request().LocalDateTime, "UTC"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.CancelAsync(post.Id, post.Revision));
         host.MakeDue(edited);
         await host.Store.ClaimAsync(host.Clock.GetUtcNow(), TimeSpan.FromMinutes(2));
         var running = await host.ReadAsync(post.Id);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.UpdateAsync(post.Id, running.Revision, host.Request()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.RescheduleAsync(post.Id, running.Revision, host.Clock.GetUtcNow().AddHours(1).UtcDateTime, "UTC"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Scheduler.CancelAsync(post.Id, running.Revision));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.Scheduler.UpdateAsync(post.Id, running.Revision, host.Request()));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.Scheduler.RescheduleAsync(post.Id, running.Revision, host.Clock.GetUtcNow().AddHours(1).UtcDateTime,
+                "UTC"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            host.Scheduler.CancelAsync(post.Id, running.Revision));
         Assert.Equal(ScheduleState.Running, (await host.ReadAsync(post.Id)).State);
     }
 
@@ -204,10 +214,14 @@ public class SchedulingStoreAndServiceTests
         await using var host = await SchedulingTestHost.CreateAsync();
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
-            db.Contacts.Add(new Contact { Key = "friend", DisplayName = "Original",
-                BlueskyHandle = "original.test", BlueskyDid = "did:plc:original" });
+            db.Contacts.Add(new Contact
+            {
+                Key = "friend", DisplayName = "Original",
+                BlueskyHandle = "original.test", BlueskyDid = "did:plc:original"
+            });
             await db.SaveChangesAsync();
         }
+
         var post = await host.Scheduler.CreateAsync(host.Request("Hi {@friend}"));
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
@@ -217,6 +231,7 @@ public class SchedulingStoreAndServiceTests
             friend.BlueskyDid = "did:plc:changed";
             await db.SaveChangesAsync();
         }
+
         var moved = await host.Scheduler.RescheduleAsync(post.Id, post.Revision,
             host.Clock.GetUtcNow().AddMinutes(20).UtcDateTime, "UTC");
         await host.RestartAsync();
@@ -233,9 +248,11 @@ public class SchedulingStoreAndServiceTests
         await using var host = await SchedulingTestHost.CreateAsync();
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
-            db.Contacts.Add(new Contact { Key = "friend", DisplayName = "Original", BlueskyHandle = "old.test", BlueskyDid = "did:plc:old" });
+            db.Contacts.Add(new Contact
+                { Key = "friend", DisplayName = "Original", BlueskyHandle = "old.test", BlueskyDid = "did:plc:old" });
             await db.SaveChangesAsync();
         }
+
         var post = await host.Scheduler.CreateAsync(host.Request("Hi {@friend}"));
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
@@ -244,6 +261,7 @@ public class SchedulingStoreAndServiceTests
             friend.BlueskyDid = "did:plc:new";
             await db.SaveChangesAsync();
         }
+
         host.Credentials.Reference = "new-approved-account";
         var edited = await host.Scheduler.UpdateAsync(post.Id, post.Revision, host.Request("Hi {@friend}"));
         host.MakeDue(edited);
@@ -287,7 +305,8 @@ public class SchedulingStoreAndServiceTests
     {
         await using var host = await SchedulingTestHost.CreateAsync();
         Assert.DoesNotContain(host.Provider.GetServices<IHostedService>(), s => s is SocialPosterSchedulingWorker);
-        Assert.Same(host.Protection, host.Provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
+        Assert.Same(host.Protection,
+            host.Provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
         Assert.IsType<SqliteScheduledPostStore>(host.Store);
         Assert.IsType<FileScheduledMediaStore>(host.Media);
         var services = new ServiceCollection();
@@ -321,9 +340,48 @@ public class SchedulingStoreAndServiceTests
             using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await worker.StopAsync(stop.Token);
         }
+
         var result = await host.ReadAsync(post.Id);
         Assert.Equal(ScheduleState.Completed, result.State);
         Assert.Equal(DeliveryState.Succeeded, Assert.Single(result.Outcomes).State);
+        Assert.Single(host.Publisher.Calls);
+    }
+
+    [Fact]
+    public async Task Worker_SchedulerDisabled_DoesNotPublishUntilReEnabled()
+    {
+        await using var host = await SchedulingTestHost.CreateAsync();
+        var settings = host.Provider.GetRequiredService<SchedulerSettings>();
+        Assert.True(await settings.IsEnabledAsync());
+        await settings.SetEnabledAsync(false);
+        Assert.False(await settings.IsEnabledAsync());
+
+        var post = await host.Scheduler.CreateAsync(host.Request());
+        host.MakeDue(post);
+        var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.Publisher.Behavior = (_, _) =>
+        {
+            observed.TrySetResult();
+            return Task.FromResult("https://example.invalid/worker-published");
+        };
+        var fastPolling = Microsoft.Extensions.Options.Options.Create(
+            new SchedulingOptions { PollInterval = TimeSpan.FromMilliseconds(200) });
+        using var worker = ActivatorUtilities.CreateInstance<SocialPosterSchedulingWorker>(host.Provider, fastPolling);
+        try
+        {
+            await worker.StartAsync(CancellationToken.None);
+            await Assert.ThrowsAsync<TimeoutException>(() => observed.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.Empty(host.Publisher.Calls);
+
+            await settings.SetEnabledAsync(true);
+            await observed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await worker.StopAsync(stop.Token);
+        }
+
         Assert.Single(host.Publisher.Calls);
     }
 

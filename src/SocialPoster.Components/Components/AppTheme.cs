@@ -11,17 +11,20 @@ public static class AppTheme
             Primary = "#5b5bf0",
             Secondary = "#0ea5e9",
             Tertiary = "#ec4899",
-            Background = "#f5f6fb",
+            // Page background is noticeably darker than the white card surface, and borders are
+            // strong enough to define card edges without relying on hue (colorblind-friendly).
+            Background = "#e6e9f4",
+            BackgroundGray = "#eef0f8",
             Surface = "#ffffff",
             AppbarBackground = "#ffffff",
             AppbarText = "#1f2340",
             DrawerBackground = "#ffffff",
             DrawerText = "#3b4064",
-            DrawerIcon = "#7a80a8",
+            DrawerIcon = "#666d96",
             TextPrimary = "#1f2340",
-            TextSecondary = "#5f6588",
-            LinesDefault = "#e6e8f2",
-            Divider = "#e6e8f2",
+            TextSecondary = "#4f5578",
+            LinesDefault = "#c3c8de",
+            Divider = "#d3d7e8",
             Success = "#16a34a",
         },
         PaletteDark = new PaletteDark
@@ -51,7 +54,11 @@ public static class AppTheme
         {
             Default = new DefaultTypography
             {
-                FontFamily = ["Inter", "Segoe UI Variable", "Segoe UI", "system-ui", "-apple-system", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+                FontFamily =
+                [
+                    "Inter", "Segoe UI Variable", "Segoe UI", "system-ui", "-apple-system", "Roboto", "Helvetica Neue",
+                    "Arial", "sans-serif"
+                ],
             },
             Button = new ButtonTypography { TextTransform = "none", FontWeight = "600" },
             H4 = new H4Typography { FontWeight = "700" },
