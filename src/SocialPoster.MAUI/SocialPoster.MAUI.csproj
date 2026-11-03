@@ -50,6 +50,11 @@
         <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
         <!-- EF Core, System.Text.Json and the agent use reflection, so keep every assembly intact in Release too. -->
         <MtouchLink>None</MtouchLink>
+        <!-- Release publishes of Mac Catalyst apps are fully AOT-compiled, which disables runtime code generation.
+             EF Core then refuses to build its model at startup ("Model building is not supported when publishing
+             with NativeAOT"). The interpreter keeps dynamic code working, as EF Core, expression trees and the
+             agent's serializers need. -->
+        <UseInterpreter>true</UseInterpreter>
         <!-- The Copilot CLI is a Node bundle the Mac Catalyst app bundler can't package, so don't bundle it;
              MauiProgram points the SDK at an installed `copilot` instead. -->
         <CopilotSkipCliDownload>true</CopilotSkipCliDownload>
