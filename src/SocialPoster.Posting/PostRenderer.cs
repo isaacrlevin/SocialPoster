@@ -42,8 +42,10 @@ public static class PostRenderer
             }
         }
         var value = text.ToString();
+        var urls = TextMetrics.FindUrls(value).ToList();
         return new() { Platform = Platform.Threads, DisplayText = value, PayloadText = value,
-            Length = TextMetrics.GraphemeCount(value), Limit = TextMetrics.ThreadsLimit, Warnings = warnings };
+            Length = TextMetrics.GraphemeCount(value), Limit = TextMetrics.ThreadsLimit, Warnings = warnings,
+            LinkCardUrl = urls.Count > 0 ? urls[^1].Url : null };
     }
 
     public static RenderedPost RenderMastodon(string? template, ContactResolver resolve)

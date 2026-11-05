@@ -87,6 +87,27 @@ public class ThreadsTests
     }
 
     [Fact]
+    public void Renderer_picks_the_last_link_as_the_card_url()
+    {
+        Assert.Null(Post("No links here").LinkCardUrl);
+        Assert.Equal("https://example.com/last",
+            Post("Read https://isaacl.dev/aca then https://example.com/last.").LinkCardUrl);
+    }
+
+    [Fact]
+    public async Task Post_attaches_the_last_link_as_a_link_preview_card()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"id":"thread9"}""");
+        host.Http.Add("""{"id":"thread9","permalink":"https://www.threads.com/@jane/post/abc"}""");
+        await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
+        Assert.Equal("media_type=TEXT&text=New+post+https%3A%2F%2Fisaacl.dev%2Faca&link_attachment=https%3A%2F%2Fisaacl.dev%2Faca",
+            host.Http.Requests[0].Body);
+    }
+
+    [Fact]
     public async Task Post_rejects_invalid_input_before_any_request()
     {
         await using var host = await Host.CreateAsync();

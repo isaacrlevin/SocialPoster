@@ -118,8 +118,9 @@ public sealed class RenderedPost
     public required int Length { get; init; }
     public required int Limit { get; init; }
 
-    /// <summary>The URL Bluesky should render as an external link-preview card (embed), if any. This is the
-    /// full, un-shortened URL of the last link in the post, matching the official app's behavior.</summary>
+    /// <summary>The URL to render as a link-preview card, if any: Bluesky's external embed and Threads'
+    /// <c>link_attachment</c>. This is the full, un-shortened URL of the last link in the post, matching the
+    /// official Bluesky app's behavior.</summary>
     public string? LinkCardUrl { get; init; }
 
     public bool IsOverLimit => Length > Limit;

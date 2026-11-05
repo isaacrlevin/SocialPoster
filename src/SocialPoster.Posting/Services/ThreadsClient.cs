@@ -60,7 +60,11 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
         return new(userId, token);
     }
 
-    /// <summary>Creates a text container, publishes it, then looks up the permalink of the new thread.</summary>
+    /// <summary>
+    /// Creates a text container, publishes it, then looks up the permalink of the new thread. The post's last link
+    /// (<see cref="RenderedPost.LinkCardUrl"/>) is attached as a link-preview card, so Threads shows that page's image
+    /// and title like the Bluesky card; without one, Threads would preview the first link instead.
+    /// </summary>
     public async Task<string> PostAsync(RenderedPost post, IReadOnlyList<MediaAttachment> media, CancellationToken ct = default)
     {
         if (post.IsEmpty || post.IsOverLimit) throw new InvalidOperationException("Threads post is empty or exceeds the 500-character limit.");
@@ -69,11 +73,14 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
         var connection = await ConnectAsync(ct);
         var userId = Uri.EscapeDataString(connection.UserId);
 
-        using var create = new FormUrlEncodedContent(new Dictionary<string, string>
+        var fields = new Dictionary<string, string>
         {
             ["media_type"] = "TEXT",
             ["text"] = post.PayloadText,
-        });
+        };
+        // link_attachment is only valid on text posts, which are the only kind this client creates.
+        if (!string.IsNullOrWhiteSpace(post.LinkCardUrl)) fields["link_attachment"] = post.LinkCardUrl;
+        using var create = new FormUrlEncodedContent(fields);
         var container = await SendAsync(connection.Token, HttpMethod.Post, $"{userId}/threads", create, ct);
 
         using var publish = new FormUrlEncodedContent(new Dictionary<string, string>

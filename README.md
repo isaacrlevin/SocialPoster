@@ -94,7 +94,9 @@ platforms, text overrides and media.
 - **Threads** counts Unicode graphemes against a 500-character limit and posts publicly through the Threads Graph API.
   Connect it under Accounts with a user access token that has `threads_basic` and `threads_content_publish`. Posts are
   **text only**: the API accepts media only by public URL, not uploads, so selecting Threads with attachments shows a
-  validation error. Contacts store a Threads username (add it by hand; follow sync isn't supported).
+  validation error. If the post contains a link, the last one is sent as the post's `link_attachment`, so Threads shows
+  its link-preview card (image and title from the page's Open Graph tags). Contacts store a Threads username (add it by
+  hand; follow sync isn't supported).
 - **Bluesky** shortens any `http(s)://` link the same way the official app does — to the domain plus the start of the
   path, e.g. `www.tiktok.com/@isaacrlevin...` — so the character count matches what you'd see there, while the full URL
   is still stored as the link's target (the facet) and works when clicked. If the post contains a link, publishing also
@@ -1008,7 +1010,7 @@ verify**.
    later; **Forget token** removes the local copy only.
 
 SocialPoster uses the token as-is and doesn't refresh it, so generate a new one when it expires. Threads posts are
-public and text only.
+public and text only; the post's last link is shown as a link-preview card.
 
 "Copy text" works without any accounts connected. LinkedIn's copied text uses plain names, because tags only work
 through the API.
