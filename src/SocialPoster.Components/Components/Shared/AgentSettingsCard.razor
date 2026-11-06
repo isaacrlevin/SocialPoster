@@ -13,7 +13,7 @@
     <div class="sp-card-body">
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
             An AI agent searches the web for people's @PlatformNames accounts so you can pick the right one, and can verify accounts and draft posts from a link.
-            Use your GitHub Copilot subscription, or add Microsoft Foundry or any OpenAI-compatible provider: OpenAI, OpenRouter, Groq, or a local model through Ollama or LM Studio.
+            Use your GitHub Copilot subscription, or add Microsoft Foundry or any OpenAI-compatible provider: OpenAI, OpenRouter, Groq@(AllowLocal ? ", or a local model through Ollama or LM Studio" : "").
         </MudText>
 
         <MudGrid Spacing="3">
@@ -95,7 +95,7 @@
                 {
                     <MudText Typo="Typo.caption" Color="Color.Secondary">Start from a preset, then adjust anything you like.</MudText>
                     <div class="d-flex flex-wrap gap-1 mb-2 mt-1">
-                        @foreach (var preset in AgentProviderPresets.All)
+                        @foreach (var preset in Presets)
                         {
                             var chosen = preset;
                             <MudChip T="string" Size="Size.Small" Variant="@(presetName == chosen.Name ? Variant.Filled : Variant.Outlined)"
@@ -117,11 +117,11 @@
                     </MudItem>
                     <MudItem xs="12" md="7">
                         <MudTextField T="string" Immediate="true" @bind-Value="editUrl" Label="@FormPreset.UrlLabel" Placeholder="@FormPreset.UrlPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      HelperText="@(IsFoundryForm ? "Any endpoint URL from the Foundry portal; SocialPoster uses its /openai/v1 API." : "The API root that serves /chat/completions. Plain http is only allowed for this computer or your local network.")" />
+                                      HelperText="@(IsFoundryForm ? "Any endpoint URL from the Foundry portal; SocialPoster uses its /openai/v1 API." : AllowLocal ? "The API root that serves /chat/completions. Plain http is only allowed for this computer or your local network." : "The API root that serves /chat/completions. It must be an https URL reachable from this server.")" />
                     </MudItem>
                     <MudItem xs="12" md="5">
                         <MudTextField T="string" Immediate="true" @bind-Value="editKey" Label="API key" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      Placeholder="@(editHasKey ? "•••• saved (leave blank to keep)" : IsFoundryForm ? "Key 1 or Key 2" : "Leave blank for local servers")"
+                                      Placeholder="@(editHasKey ? "•••• saved (leave blank to keep)" : IsFoundryForm ? "Key 1 or Key 2" : AllowLocal ? "Leave blank for local servers" : "")"
                                       HelperText="@($"Stored encrypted on this computer and only sent to the {FormPreset.UrlLabel.ToLowerInvariant()}.")" />
                     </MudItem>
                 </MudGrid>
@@ -171,7 +171,7 @@
             }
             else if (searchKind == SearchKind.SearXNG)
             {
-                <MudTextField T="string" Immediate="true" @bind-Value="searchEndpoint" Label="SearXNG URL" Placeholder="http://localhost:8080" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
+                <MudTextField T="string" Immediate="true" @bind-Value="searchEndpoint" Label="SearXNG URL" Placeholder="@(AllowLocal ? "http://localhost:8080" : "https://searx.example.com")" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
             }
             <Feedback Text="@searchMsg" IsError="@searchErr" />
             <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="mt-2" OnClick="SaveSearchAsync" Disabled="@busy">Save search</MudButton>
@@ -215,6 +215,11 @@
     private SearchKind searchKind;
     private string? searchEndpoint, searchKey;
     private bool searchHasKey;
+
+    /// <summary>False when SocialPoster is hosted away from the user's computer, so Ollama and LM Studio can't work.</summary>
+    private bool AllowLocal => AgentStore.AllowLocal;
+
+    private IReadOnlyList<AgentProviderPreset> Presets => AgentProviderPresets.For(AllowLocal);
 
     private AgentProvider? activeProvider => providers.FirstOrDefault(p => p.Id == activeId);
     private bool IsFoundryForm => presetName == AgentProviderPresets.FoundryName || AgentSettingsStore.FoundryHost(editUrl) is not null;
@@ -339,7 +344,7 @@
         editing = new AgentProvider("", "", "", null, "");
         editKey = "";
         editHasKey = false;
-        ApplyPreset(AgentProviderPresets.All[0]);
+        ApplyPreset(Presets[0]);
     }
 
     private void StartEdit(AgentProvider provider)

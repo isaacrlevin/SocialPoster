@@ -379,6 +379,12 @@ to a model that supports **tool (function) calling**. SocialPoster sends the key
 
 Plain `http://` is only accepted for this computer or private network addresses, so hosted services must use HTTPS.
 
+**Hosting SocialPoster on a server:** Ollama and LM Studio only make sense when SocialPoster runs on your own computer,
+because `localhost` would be the server. The desktop apps always count as local. The web host decides for itself: it is
+treated as remote when it detects a container or common cloud host (Docker, Kubernetes, Azure App Service, Cloud Run, Fly, and so on).
+Remote hosts hide the local presets and refuse localhost and private-network URLs for providers and SearXNG, both when saving
+and when the agent runs. Override the detection with `SocialPoster:Location` (`Auto`, `Local` or `Remote`; env `SocialPoster__Location=Remote`).
+
 **Web search (needed for your own provider)**
 
 - **Brave Search:** create an account at the [Brave Search API dashboard](https://api-dashboard.search.brave.com) (it's

@@ -170,6 +170,65 @@ public class AgentSettingsStoreTests
         foreach (var preset in AgentProviderPresets.All.Where(p => p.BaseUrl.Length > 0 && !p.BaseUrl.Contains("YOUR-")))
             Assert.Null(AgentSettingsStore.Validate(Provider("Preset", preset.BaseUrl, null, preset.ModelExample.Length > 0 ? preset.ModelExample : "m")));
     }
+
+    [Theory]
+    [InlineData("http://localhost:11434/v1")]
+    [InlineData("https://localhost:1234/v1")]
+    [InlineData("http://127.0.0.1:1234/v1")]
+    [InlineData("http://192.168.1.20:11434/v1")]
+    [InlineData("http://169.254.169.254/v1")]
+    [InlineData("http://ollama:11434/v1")]
+    public void Hosted_installs_refuse_localhost_and_private_network_endpoints(string url)
+    {
+        Assert.NotNull(AgentSettingsStore.Validate(Provider("Local", url), allowLocal: false));
+        Assert.NotNull(AgentSettingsStore.Validate(new SearchSettings(SearchKind.SearXNG, url), allowLocal: false));
+    }
+
+    [Fact]
+    public void Hosted_installs_still_accept_public_https_endpoints_and_hide_the_local_presets()
+    {
+        Assert.Null(AgentSettingsStore.Validate(Provider("OpenAI", "https://api.openai.com/v1"), allowLocal: false));
+        Assert.Null(AgentSettingsStore.Validate(new SearchSettings(SearchKind.SearXNG, "https://searx.example.com"), allowLocal: false));
+        Assert.DoesNotContain(AgentProviderPresets.For(false), p => p.RequiresLocalHost);
+        Assert.Contains(AgentProviderPresets.For(false), p => p.Name == "Custom");
+        Assert.Equal(AgentProviderPresets.All.Count, AgentProviderPresets.For(true).Count);
+    }
+
+    [Fact]
+    public async Task A_remote_store_refuses_to_save_a_local_provider()
+    {
+        var (_, secrets, db) = await CreateAsync();
+        await using var _ = db;
+        var remote = new AgentSettingsStore(secrets, new HostLocality(Microsoft.Extensions.Options.Options.Create(new SocialPosterOptions { Location = HostLocation.Remote })));
+        Assert.False(remote.AllowLocal);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => remote.SaveProviderAsync(Provider("Ollama")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => remote.SaveSearchAsync(new(SearchKind.SearXNG, "http://localhost:8080")));
+        Assert.Empty(await remote.GetProvidersAsync());
+        await remote.SaveProviderAsync(Provider("OpenAI", "https://api.openai.com/v1", "k", "gpt-4o-mini"));
+    }
+}
+
+public class HostLocalityTests
+{
+    private static Func<string, string?> Env(params string[] set) => name => set.Contains(name) ? "1" : null;
+
+    [Fact]
+    public void Explicit_location_wins_over_detection()
+    {
+        Assert.True(HostLocality.Resolve(HostLocation.Local, Env("DOTNET_RUNNING_IN_CONTAINER")));
+        Assert.False(HostLocality.Resolve(HostLocation.Remote, Env()));
+    }
+
+    [Theory]
+    [InlineData("DOTNET_RUNNING_IN_CONTAINER")]
+    [InlineData("KUBERNETES_SERVICE_HOST")]
+    [InlineData("WEBSITE_SITE_NAME")]
+    public void Auto_treats_containers_and_cloud_hosts_as_remote(string marker) =>
+        Assert.False(HostLocality.Resolve(HostLocation.Auto, Env(marker)));
+
+    [Fact]
+    public void Auto_treats_a_plain_machine_as_local() =>
+        Assert.True(HostLocality.Resolve(HostLocation.Auto, Env()));
 }
 
 public class SafeWebFetcherTests

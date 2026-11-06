@@ -44,7 +44,11 @@ public static class MauiProgram
         // Data Protection's default discriminator reads IHostEnvironment.ContentRootPath, which MAUI doesn't implement.
         // Registered before AddSocialPosterCore (which adds Data Protection) so it replaces that default.
         builder.Services.AddSingleton<IApplicationDiscriminator>(new FixedApplicationDiscriminator("SocialPoster"));
-        builder.Services.AddSocialPosterCore(options => options.DataDirectory = dataDir);
+        builder.Services.AddSocialPosterCore(options =>
+        {
+            options.DataDirectory = dataDir;
+            options.Location = HostLocation.Local; // desktop apps always run on the user's own computer
+        });
         builder.Services.AddSocialPosterScheduling();
         builder.Services.AddSocialPosterSchedulingWorker(); // started by App, since MAUI doesn't run hosted services
         builder.Services.AddSocialPosterComponents(options => options.BasePath = "");

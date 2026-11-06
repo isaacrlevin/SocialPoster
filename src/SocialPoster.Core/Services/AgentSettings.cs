@@ -40,7 +40,8 @@ public sealed record SearchSettings(SearchKind Kind, string? Endpoint = null, st
 /// <param name="UrlLabel">What the service calls its base URL, so the form matches the user's portal.</param>
 /// <param name="ModelLabel">What the service calls the model, e.g. a deployment name.</param>
 public sealed record AgentProviderPreset(string Name, string BaseUrl, string ModelExample, bool NeedsApiKey, string Hint,
-    string UrlLabel = "Base URL", string ModelLabel = "Model or deployment name", string UrlPlaceholder = "https://api.openai.com/v1");
+    string UrlLabel = "Base URL", string ModelLabel = "Model or deployment name", string UrlPlaceholder = "https://api.openai.com/v1",
+    bool RequiresLocalHost = false);
 
 public static class AgentProviderPresets
 {
@@ -48,12 +49,17 @@ public static class AgentProviderPresets
 
     public static AgentProviderPreset Foundry => All.First(p => p.Name == FoundryName);
 
+    /// <summary>The presets that make sense on this host: local model servers are left out when it isn't the user's computer.</summary>
+    public static IReadOnlyList<AgentProviderPreset> For(bool allowLocal) =>
+        allowLocal ? All : All.Where(p => !p.RequiresLocalHost).ToList();
+
     public static readonly IReadOnlyList<AgentProviderPreset> All =
     [
         new("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini", true, "Needs an API key from platform.openai.com."),
         new("Ollama (local)", "http://localhost:11434/v1", "llama3.1", false,
-            "Runs on your PC, no key. The model must support tool calling (e.g. llama3.1, qwen2.5)."),
-        new("LM Studio (local)", "http://localhost:1234/v1", "", false, "Start the local server in LM Studio and load a tool-capable model."),
+            "Runs on your PC, no key. The model must support tool calling (e.g. llama3.1, qwen2.5).", RequiresLocalHost: true),
+        new("LM Studio (local)", "http://localhost:1234/v1", "", false, "Start the local server in LM Studio and load a tool-capable model.",
+            RequiresLocalHost: true),
         new("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", true, "One key for many hosted models."),
         new("Groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", true, "Fast hosted open models."),
         new(FoundryName, "", "your-deployment-name", true,
@@ -64,10 +70,16 @@ public static class AgentProviderPresets
 }
 
 /// <summary>Reads and writes the account finder's provider list, active provider and search settings.</summary>
-public sealed class AgentSettingsStore(SecretStore secrets)
+public sealed class AgentSettingsStore(SecretStore secrets, HostLocality? locality = null)
 {
     public const string CopilotId = "copilot";
     public const int MaxProviders = 20;
+
+    /// <summary>
+    /// False when SocialPoster is hosted away from the user's computer: localhost and private-network endpoints
+    /// (Ollama, LM Studio, a LAN SearXNG) are then refused. Defaults to true when no <see cref="HostLocality"/> is supplied.
+    /// </summary>
+    public bool AllowLocal => locality?.IsLocal ?? true;
 
     public async Task<IReadOnlyList<AgentProvider>> GetProvidersAsync(CancellationToken ct = default)
     {
@@ -118,7 +130,7 @@ public sealed class AgentSettingsStore(SecretStore secrets)
             Id = existing?.Id ?? Guid.NewGuid().ToString("N"),
         };
         if (string.IsNullOrEmpty(provider.ApiKey)) provider = provider with { ApiKey = existing?.ApiKey };
-        if (Validate(provider) is { } error) throw new InvalidOperationException(error);
+        if (Validate(provider, AllowLocal) is { } error) throw new InvalidOperationException(error);
         if (list.Any(p => p.Id != provider.Id && string.Equals(p.Name, provider.Name, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"A provider named '{provider.Name}' already exists.");
         if (existing is null && list.Count >= MaxProviders)
@@ -167,7 +179,7 @@ public sealed class AgentSettingsStore(SecretStore secrets)
             var old = await GetSearchAsync(ct);
             if (old.Kind == search.Kind) search = search with { ApiKey = old.ApiKey };
         }
-        if (Validate(search) is { } error) throw new InvalidOperationException(error);
+        if (Validate(search, AllowLocal) is { } error) throw new InvalidOperationException(error);
         if (search.Kind != SearchKind.SearXNG) search = search with { Endpoint = null };
         if (search.Kind == SearchKind.SearXNG) search = search with { ApiKey = null };
         await secrets.SetAsync(AgentSettingKeys.Search,
@@ -209,7 +221,8 @@ public sealed class AgentSettingsStore(SecretStore secrets)
             : null;
 
     /// <returns>An error message, or null when the provider is usable.</returns>
-    public static string? Validate(AgentProvider provider)
+    /// <param name="allowLocal">False on a hosted deployment, where localhost and private-network URLs are refused.</param>
+    public static string? Validate(AgentProvider provider, bool allowLocal = true)
     {
         var p = Normalize(provider);
         if (p.Name.Length == 0) return "Give the provider a name.";
@@ -220,11 +233,11 @@ public sealed class AgentSettingsStore(SecretStore secrets)
         if (foundry && p.ApiKey is null) return "Enter the key from your Foundry resource's Keys and Endpoint page.";
         if (p.ApiKey is not null && p.ApiKey.Any(ch => char.IsWhiteSpace(ch) || char.IsControl(ch)))
             return "API keys can't contain spaces or control characters.";
-        return ValidateEndpoint(p.BaseUrl, "Base URL", p.ApiKey is not null);
+        return ValidateEndpoint(p.BaseUrl, "Base URL", p.ApiKey is not null, allowLocal);
     }
 
     /// <returns>An error message, or null when the search settings are usable.</returns>
-    public static string? Validate(SearchSettings search)
+    public static string? Validate(SearchSettings search, bool allowLocal = true)
     {
         if (!Enum.IsDefined(search.Kind)) return "Choose a search provider.";
         if (search.Kind is SearchKind.Brave or SearchKind.Tavily && string.IsNullOrWhiteSpace(search.ApiKey))
@@ -232,16 +245,19 @@ public sealed class AgentSettingsStore(SecretStore secrets)
         if (search.ApiKey is not null && search.ApiKey.Any(ch => char.IsWhiteSpace(ch) || char.IsControl(ch)))
             return "API keys can't contain spaces or control characters.";
         if (search.Kind == SearchKind.SearXNG)
-            return ValidateEndpoint(search.Endpoint?.Trim().TrimEnd('/') ?? "", "SearXNG URL", false);
+            return ValidateEndpoint(search.Endpoint?.Trim().TrimEnd('/') ?? "", "SearXNG URL", false, allowLocal);
         return null;
     }
 
     /// <summary>HTTPS is required unless the server is on this machine or a private network.</summary>
-    private static string? ValidateEndpoint(string url, string label, bool hasSecret)
+    private static string? ValidateEndpoint(string url, string label, bool hasSecret, bool allowLocal)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") ||
             uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
             return $"{label} must be an http(s) URL without credentials, query or fragment.";
+        if (!allowLocal && IsLocalHost(uri.Host))
+            return $"{label} points at this server's own machine or network. Local servers such as Ollama and LM Studio " +
+                   "only work when SocialPoster runs on your own computer; use a hosted provider instead.";
         if (uri.Scheme == "http" && !IsLocalHost(uri.Host))
             return $"{label} must use https unless the server is on this computer or your local network.";
         return null;

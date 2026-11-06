@@ -55,6 +55,7 @@ public static class SocialPosterServiceCollectionExtensions
                 posting.PostingTimeout = core.Value.PostingTimeout);
         services.AddScoped<ContactService>();
         services.AddScoped<PublishService>();
+        services.AddSingleton<HostLocality>();
         services.AddSingleton<AgentSettingsStore>();
         services.AddSingleton<AccountFinder>();
         services.AddSingleton<AccountSearchService>();

@@ -42,12 +42,13 @@ public sealed record ReportedPost(
 public sealed class AccountFinder(
     SecretStore secrets,
     ILogger<AccountFinder> logger,
-    IOptions<SocialPosterOptions> options) : IAsyncDisposable
+    IOptions<SocialPosterOptions> options,
+    HostLocality locality) : IAsyncDisposable
 {
     public const string DefaultModel = "claude-haiku-4.5";
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(3);
 
-    private readonly AgentSettingsStore _agentSettings = new(secrets);
+    private readonly AgentSettingsStore _agentSettings = new(secrets, locality);
     private readonly Lazy<CopilotAgentBackend> _copilot = new(() => new CopilotAgentBackend(secrets, logger, options));
     private readonly Lazy<SafeWebFetcher> _fetcher = new(() => new SafeWebFetcher());
 
@@ -84,8 +85,8 @@ public sealed class AccountFinder(
         CancellationToken ct = default)
     {
         provider = AgentSettingsStore.Normalize(provider);
-        if (AgentSettingsStore.Validate(provider) is { } problem) throw new InvalidOperationException(problem);
-        if (search.Kind != SearchKind.None && AgentSettingsStore.Validate(search) is { } searchProblem)
+        if (AgentSettingsStore.Validate(provider, locality.IsLocal) is { } problem) throw new InvalidOperationException(problem);
+        if (search.Kind != SearchKind.None && AgentSettingsStore.Validate(search, locality.IsLocal) is { } searchProblem)
             throw new InvalidOperationException(searchProblem);
         var backend =
             new ChatAgentBackend(provider, WebSearch.Create(search, _searchHttp.Value), _fetcher.Value, logger);
@@ -96,7 +97,13 @@ public sealed class AccountFinder(
     {
         var provider = await _agentSettings.GetActiveProviderAsync(ct);
         if (provider is null) return _copilot.Value;
-        var search = WebSearch.Create(await _agentSettings.GetSearchAsync(ct), _searchHttp.Value);
+        // A provider saved while this was a local install may now point at the server's own network.
+        if (AgentSettingsStore.Validate(provider, locality.IsLocal) is { } problem)
+            throw new InvalidOperationException(problem);
+        var searchSettings = await _agentSettings.GetSearchAsync(ct);
+        if (AgentSettingsStore.Validate(searchSettings, locality.IsLocal) is { } searchProblem)
+            throw new InvalidOperationException(searchProblem);
+        var search = WebSearch.Create(searchSettings, _searchHttp.Value);
         return new ChatAgentBackend(provider, search, _fetcher.Value, logger);
     }
 
