@@ -190,56 +190,6 @@
                 </MudButton>
             </div>
         </MudPaper>
-
-        @if (results is not null)
-        {
-            <MudStack Spacing="2" Class="mt-4">
-                @foreach (var r in results.Where(r => EnabledPlatforms.Contains(r.Platform)))
-                {
-                    <MudAlert
-                        Severity="@(r.Success ? (r.OpensInBrowser ? Severity.Info : Severity.Success) : Severity.Error)"
-                        Variant="Variant.Outlined"
-                        Icon="@(r.OpensInBrowser && r.Success ? Icons.Material.Filled.OpenInNew : null)"
-                        Class="text-break">
-                        <MudText Typo="Typo.subtitle2">@PlatformInfo.Label(r.Platform)</MudText>
-                        @if (r.Success)
-                        {
-                            @if (r.OpensInBrowser)
-                            {
-                                <MudText Typo="Typo.body2">Opened in your browser with your post pre-filled — click
-                                    <strong>Post</strong> there to finish.
-                                    <MudLink Href="@r.Url" Target="_blank">Open again</MudLink>
-                                </MudText>
-                            }
-                            else
-                            {
-                                <MudLink Href="@r.Url" Target="_blank" Typo="Typo.body2">View post</MudLink>
-                            }
-
-                            @if (r.Platform == Platform.LinkedIn && ManualLinkedInTags.Count > 0)
-                            {
-                                <div class="mt-2">
-                                    <MudText Typo="Typo.subtitle2">Tag these by hand on LinkedIn</MudText>
-                                    <MudText Typo="Typo.body2" Class="mb-1">
-                                        LinkedIn doesn't let apps tag people.
-                                        <MudLink Href="@r.Url" Target="_blank">Open your post</MudLink>
-                                        , choose ⋯ ▸ Edit post,
-                                        then for each person: click <strong>Copy @@name</strong> below, delete their
-                                        plain name in the post, paste, and pick
-                                        them from LinkedIn's own suggestion list so the tag is real.
-                                    </MudText>
-                                    @LinkedInChecklist
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.body2" Class="text-break">@r.Error</MudText>
-                        }
-                    </MudAlert>
-                }
-            </MudStack>
-        }
     </MudItem>
 
     @* Right column: the scheduling panel (when enabled) with the platform accounts beneath it. *@
@@ -422,7 +372,7 @@
                         {
                             <div class="mt-3">
                                 <MudText Typo="Typo.subtitle2">Tag by hand after posting</MudText>
-                                @LinkedInChecklist
+                                @LinkedInChecklist(ManualLinkedInTags)
                             </div>
                         }
 
@@ -437,6 +387,67 @@
     </DialogContent>
     <DialogActions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseEditor">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<MudDialog Visible="@(publishedResults is not null)" VisibleChanged="OnPublishedVisibleChanged"
+           Options="@publishedOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Published posts</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (publishedResults is not null)
+        {
+            <MudStack Spacing="2">
+                @foreach (var r in publishedResults)
+                {
+                    <MudAlert
+                        Severity="@(r.Success ? (r.OpensInBrowser ? Severity.Info : Severity.Success) : Severity.Error)"
+                        Variant="Variant.Outlined"
+                        Icon="@(r.OpensInBrowser && r.Success ? Icons.Material.Filled.OpenInNew : null)"
+                        Class="text-break">
+                        <MudText Typo="Typo.subtitle2">@PlatformInfo.Label(r.Platform)</MudText>
+                        @if (r.Success)
+                        {
+                            @if (r.OpensInBrowser)
+                            {
+                                <MudText Typo="Typo.body2">Opened in your browser with your post pre-filled — click
+                                    <strong>Post</strong> there to finish.
+                                    <MudLink Href="@r.Url" Target="_blank">Open again</MudLink>
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudLink Href="@r.Url" Target="_blank" Typo="Typo.body2">View post</MudLink>
+                            }
+
+                            @if (r.Platform == Platform.LinkedIn && publishedLinkedInTags.Count > 0)
+                            {
+                                <div class="mt-2">
+                                    <MudText Typo="Typo.subtitle2">Tag these by hand on LinkedIn</MudText>
+                                    <MudText Typo="Typo.body2" Class="mb-1">
+                                        LinkedIn doesn't let apps tag people.
+                                        <MudLink Href="@r.Url" Target="_blank">Open your post</MudLink>
+                                        , choose ⋯ ▸ Edit post,
+                                        then for each person: click <strong>Copy @@name</strong> below, delete their
+                                        plain name in the post, paste, and pick
+                                        them from LinkedIn's own suggestion list so the tag is real.
+                                    </MudText>
+                                    @LinkedInChecklist(publishedLinkedInTags)
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="text-break">@r.Error</MudText>
+                        }
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ClosePublishedDialog">Close</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -477,11 +488,27 @@
     private bool generatingPost;
     private string sourceUrl = "";
     private string? postProgress;
-    private IReadOnlyList<PublishResult>? results;
     private DotNetObjectReference<Home>? selfRef;
 
     private PlatformDraft? editingDraft;
     private readonly DialogOptions editorOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true };
+
+    // Snapshot of the last "Publish" run, shown in a dialog. Kept separate from the composer state because the
+    // composer is reset right after publishing, which would otherwise discard the links and LinkedIn tag list.
+    private IReadOnlyList<PublishResult>? publishedResults;
+    private List<Contact> publishedLinkedInTags = [];
+    private readonly DialogOptions publishedOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+
+    private void ClosePublishedDialog()
+    {
+        publishedResults = null;
+        publishedLinkedInTags = [];
+    }
+
+    private void OnPublishedVisibleChanged(bool visible)
+    {
+        if (!visible) ClosePublishedDialog();
+    }
 
     private void OpenEditor(PlatformDraft draft) => editingDraft = draft;
 
@@ -522,7 +549,6 @@
         searchCts?.Cancel();
         status = await Publisher.GetStatusAsync(EnabledPlatforms.Platforms);
         xIntent = EnabledPlatforms.Contains(Platform.X) && await Publisher.IsXIntentEnabledAsync();
-        results = null;
         notes.Clear();
         candidates = [];
         searchViews.Clear();
@@ -544,10 +570,10 @@
         }
     }
 
-    private RenderFragment LinkedInChecklist => __builder =>
+    private RenderFragment LinkedInChecklist(IReadOnlyList<Contact> tags) => __builder =>
     {
         <MudStack Spacing="0">
-            @foreach (var c in ManualLinkedInTags)
+            @foreach (var c in tags)
             {
                 var id = c.Id;
                 <div class="d-flex align-center flex-wrap gap-1">
@@ -715,7 +741,6 @@
     private async Task OnFilesSelectedAsync(InputFileChangeEventArgs e)
     {
         uploading = true;
-        results = null;
         try
         {
             var dir = Path.Combine(Path.GetTempPath(), "SocialPoster", "uploads");
@@ -763,7 +788,6 @@
     {
         media.Remove(m);
         TryDelete(m.Path);
-        results = null;
     }
 
     private void ClearMedia()
@@ -797,7 +821,6 @@
 
     private async Task OnTemplatesChanged()
     {
-        results = null;
         foreach (var d in drafts) d.Copied = false;
         foreach (var d in drafts.Where(d => d.Override is not null)) d.CustomizedText = d.Override;
 
@@ -914,7 +937,6 @@
             d.Selected = true;
         }
 
-        results = null;
         ClearMedia();
         mentioned = [];
         notes.Clear();
@@ -938,19 +960,32 @@
     {
         if (publishing) return;
         publishing = true;
-        results = null;
+        ClosePublishedDialog();
+        // Start a fresh post once something was published (or the host took the submission), so the next post
+        // needs no "New post" click. Notes raised while publishing are collected here and survive that reset.
+        // If publishing fails outright, nothing went out: keep the draft so it can be fixed and retried.
+        var resetAfter = false;
+        var publishNotes = new List<Note>();
         try
         {
             var submission = await PrepareSubmissionAsync();
-            results = await Publisher.PublishAsync(submission.BaseTemplate, submission.Templates, submission.Media);
+            var linkedInTags = ManualLinkedInTags;
+            var results = await Publisher.PublishAsync(submission.BaseTemplate, submission.Templates, submission.Media);
+            resetAfter = true;
+            var shown = results.Where(r => EnabledPlatforms.Contains(r.Platform)).ToList();
+            if (shown.Count > 0)
+            {
+                publishedLinkedInTags = linkedInTags;
+                publishedResults = shown;
+            }
 
             var li = results.FirstOrDefault(r => r.Platform == Platform.LinkedIn && r.Success && r.Url is not null);
-            if (li is not null && ManualLinkedInTags.Count > 0)
+            if (li is not null && linkedInTags.Count > 0)
             {
                 var opened = await JS.InvokeAsync<bool>("socialPoster.openInNewTab", li.Url);
                 if (!opened)
                 {
-                    notes.Add(new Note("Your browser blocked the LinkedIn post from opening automatically. Use \"View post\" above to tag people by hand."));
+                    publishNotes.Add(new Note("Your browser blocked the LinkedIn post from opening automatically. Use \"Open your post\" in the published posts dialog to tag people by hand."));
                 }
             }
 
@@ -960,22 +995,24 @@
                 var opened = await JS.InvokeAsync<bool>("socialPoster.openInNewTab", xIntent.Url);
                 if (!opened)
                 {
-                    notes.Add(new Note("Your browser blocked X from opening automatically. Use \"Open again\" above to finish your post."));
+                    publishNotes.Add(new Note("Your browser blocked X from opening automatically. Use \"Open again\" in the published posts dialog to finish your post."));
                 }
             }
         }
         catch (ComposerStagedException)
         {
             // The host handled the submission and informed the user; this is not a failure.
+            resetAfter = true;
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or ArgumentException or OperationCanceledException)
         {
-            notes.Add(new Note($"Publishing stopped: {ex.Message}", true));
+            publishNotes.Add(new Note($"Publishing stopped: {ex.Message}", true));
         }
         finally
         {
             publishing = false;
-            await NewPostAsync();
+            if (resetAfter) await NewPostAsync();
+            notes.AddRange(publishNotes);
         }
     }
 

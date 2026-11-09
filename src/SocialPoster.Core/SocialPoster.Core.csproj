@@ -6,7 +6,7 @@
         <Nullable>enable</Nullable>
         <IsPackable>true</IsPackable>
         <PackageId>SocialPoster.Core</PackageId>
-        <Version>0.6.6</Version>
+        <Version>0.7.1</Version>
         <Authors>Isaac Levin</Authors>
         <Description>Reusable SocialPoster app services: SQLite storage, contacts, scheduling and the Copilot account finder. Posting itself lives in SocialPoster.Posting.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
