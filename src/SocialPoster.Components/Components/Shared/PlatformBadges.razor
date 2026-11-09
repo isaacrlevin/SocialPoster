@@ -1,29 +1,48 @@
 ﻿@inherits PlatformComponent
 
 <span class="platform-badges">
-    @if (EnabledPlatforms.Contains(Platform.Mastodon))
+    @foreach (var platform in Order.Where(EnabledPlatforms.Contains))
     {
-        <span class="pbadge @(Contact.HasIdentity(Platform.Mastodon) ? "on" : "off")" title="@(Contact.MastodonAcct is null ? "No Mastodon account" : "@" + Contact.MastodonAcct)">Ⓜ</span>
-    }
-    @if (EnabledPlatforms.Contains(Platform.X))
-    {
-    <span class="pbadge @(Contact.HasIdentity(Platform.X) ? "on" : "off")" title="@(Contact.XUsername is null ? "No X account" : "@" + Contact.XUsername)">𝕏</span>
-    }
-    @if (EnabledPlatforms.Contains(Platform.Bluesky))
-    {
-    <span class="pbadge @(Contact.HasIdentity(Platform.Bluesky) ? "on" : "off")" title="@(Contact.BlueskyHandle is null ? "No Bluesky account" : "@" + Contact.BlueskyHandle)">🦋</span>
-    }
-    @if (EnabledPlatforms.Contains(Platform.LinkedIn))
-    {
-    <span class="pbadge @(Contact.HasIdentity(Platform.LinkedIn) ? "on" : Contact.NeedsManualLinkedInTag ? "partial" : "off")"
-          title="@(Contact.LinkedInUrn ?? (Contact.NeedsManualLinkedInTag ? "LinkedIn profile known; tag by hand after posting" : "No LinkedIn account"))">in</span>
-    }
-    @if (EnabledPlatforms.Contains(Platform.Threads))
-    {
-    <span class="pbadge @(Contact.HasIdentity(Platform.Threads) ? "on" : "off")" title="@(Contact.ThreadsUsername is null ? "No Threads account" : "@" + Contact.ThreadsUsername)">@@</span>
+        var state = State(platform);
+        var title = Title(platform);
+        if (Linkable && state != "off" && ContactProfiles.Url(Contact, platform) is { } url)
+        {
+            <a class="pbadge @state" href="@url" target="_blank" rel="noopener noreferrer" title="@($"{title} — open profile in a new tab")"
+               aria-label="@($"Open {Contact.DisplayName}'s {PlatformInfo.Label(platform)} profile in a new tab")">@Glyph(platform)</a>
+        }
+        else
+        {
+            <span class="pbadge @state" title="@title">@Glyph(platform)</span>
+        }
     }
 </span>
 
 @code {
+    private static readonly Platform[] Order = [Platform.Mastodon, Platform.X, Platform.Bluesky, Platform.LinkedIn, Platform.Threads];
+
     [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+
+    /// <summary>Linked badges open the contact's profile in a new browser tab. Leave off inside clickable rows.</summary>
+    [Parameter] public bool Linkable { get; set; }
+
+    private string State(Platform platform) => Contact.HasIdentity(platform) ? "on"
+        : platform == Platform.LinkedIn && Contact.NeedsManualLinkedInTag ? "partial" : "off";
+
+    private string Title(Platform platform) => platform switch
+    {
+        Platform.Mastodon => Contact.MastodonAcct is null ? "No Mastodon account" : "@" + Contact.MastodonAcct,
+        Platform.X => Contact.XUsername is null ? "No X account" : "@" + Contact.XUsername,
+        Platform.Bluesky => Contact.BlueskyHandle is null ? "No Bluesky account" : "@" + Contact.BlueskyHandle,
+        Platform.LinkedIn => Contact.LinkedInUrn ?? (Contact.NeedsManualLinkedInTag ? "LinkedIn profile known; tag by hand after posting" : "No LinkedIn account"),
+        _ => Contact.ThreadsUsername is null ? "No Threads account" : "@" + Contact.ThreadsUsername,
+    };
+
+    private static string Glyph(Platform platform) => platform switch
+    {
+        Platform.Mastodon => "Ⓜ",
+        Platform.X => "𝕏",
+        Platform.Bluesky => "🦋",
+        Platform.LinkedIn => "in",
+        _ => "@",
+    };
 }

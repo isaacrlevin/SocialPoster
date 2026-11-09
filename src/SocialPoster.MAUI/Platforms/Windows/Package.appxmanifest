@@ -1,35 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Used only for MSIX (Microsoft Store) builds: dotnet publish -p:WindowsPackageType=MSIX. The regular Windows build is
+     unpackaged and ignores this file. Identity Name, Publisher, PublisherDisplayName and Version are set at build time
+     from the Store* properties in SocialPoster.MAUI.csproj, so edit them there. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
-  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  xmlns:virtualization="http://schemas.microsoft.com/appx/manifest/virtualization/windows10"
+  IgnorableNamespaces="uap rescap virtualization">
 
   <Identity Name="maui-package-name-placeholder" Publisher="CN=Isaac Levin" Version="0.0.0.0" />
-
-  <mp:PhoneIdentity PhoneProductId="C82CA30C-47C5-4681-A9E8-A5DFA371ACA0" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>$placeholder$</DisplayName>
     <PublisherDisplayName>Isaac Levin</PublisherDisplayName>
     <Logo>$placeholder$.png</Logo>
+    <!-- Packaged apps get their AppData writes redirected to a private per-package folder. SocialPoster's database and
+         key ring live in %LOCALAPPDATA%\SocialPoster and are shared with the Web sample and unpackaged installs, so keep
+         that folder real. This needs the unvirtualizedResources capability below. -->
+    <virtualization:FileSystemWriteVirtualization>
+      <virtualization:ExcludedDirectories>
+        <virtualization:ExcludedDirectory>$(KnownFolder:LocalAppData)\SocialPoster</virtualization:ExcludedDirectory>
+      </virtualization:ExcludedDirectories>
+    </virtualization:FileSystemWriteVirtualization>
   </Properties>
 
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+    <!-- 19041 (Windows 10 2004) is the first build that supports virtualization:ExcludedDirectories. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
 
   <Resources>
-    <Resource Language="x-generate" />
+    <Resource Language="en-us" />
   </Resources>
 
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="$targetentrypoint$">
       <uap:VisualElements
         DisplayName="$placeholder$"
-        Description="$placeholder$"
+        Description="Write once and post to Bluesky, Mastodon, Threads, LinkedIn and X, with scheduling and contacts."
         Square150x150Logo="$placeholder$.png"
         Square44x44Logo="$placeholder$.png"
         BackgroundColor="transparent">
@@ -41,6 +50,7 @@
 
   <Capabilities>
     <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
   </Capabilities>
 
 </Package>

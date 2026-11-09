@@ -15,52 +15,72 @@
 
 <PageHeader Title="Contacts" Subtitle="People you've mentioned, and the accounts they have on each platform.">
     <Actions>
-        <MudButton Variant="Variant.Outlined" OnClick="HandleConflictsAsync" Disabled="@(busy || syncing || scanningConflicts || confirmingConflictScan || merging)">Handle conflicts</MudButton>
-        <MudButton Variant="Variant.Outlined" OnClick="ToggleManualMerge" Disabled="@(busy || syncing || scanningConflicts || merging)">@(manualMerge ? "Cancel manual merge" : "Manual merge")</MudButton>
-        @foreach (var platform in EnabledPlatforms.Platforms)
-        {
-            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="() => PurgeAsync(platform)" Disabled="@(busy || syncing || scanningConflicts)">Purge @PlatformInfo.Label(platform)</MudButton>
-        }
+        @* Toolbar: one primary action, one sync menu, duplicates, and an overflow menu for maintenance + destructive actions. *@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(syncing || busy || merging)" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="() => StartEditAndScrollAsync(new Contact())">Add contact</MudButton>
-        @if (EnabledPlatforms.Contains(Platform.Mastodon) && status?.Mastodon == true)
+
+        @if (syncing)
         {
-            <MudButton Variant="Variant.Outlined" OnClick="SyncMastodonFollowsAsync" Disabled="@(!CanStartSync)"
-                       StartIcon="@Icons.Material.Filled.Sync">@(syncingMastodon ? $"Syncing… {syncCount}" : "Sync Mastodon follows")</MudButton>
-        }
-        @if (EnabledPlatforms.Contains(Platform.Bluesky))
-        {
-        <MudTooltip Text="@(string.IsNullOrWhiteSpace(blueskyHandle) ? "Set your Bluesky handle under Accounts first" : $"Import everyone @{blueskyHandle} follows")">
-            <MudButton Variant="Variant.Outlined" OnClick="SyncFollowsAsync"
-                       StartIcon="@(syncing ? null : Icons.Material.Filled.Sync)" Disabled="@(!CanStartSync || string.IsNullOrWhiteSpace(blueskyHandle))">
-                @if (syncing && !syncingX && !syncingMastodon)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                    <span>Syncing… @syncCount</span>
-                }
-                else
-                {
-                    <span>Sync Bluesky follows</span>
-                }
+            <MudButton Variant="Variant.Outlined" Disabled="true" aria-live="polite">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                <span>Syncing @(syncingX ? "X" : syncingMastodon ? "Mastodon" : "Bluesky")… @syncCount</span>
             </MudButton>
-        </MudTooltip>
         }
-        @if (canSyncX)
+        else if (HasSyncSource)
         {
-            <MudTooltip Text="Import everyone your authenticated X API account follows. Uses your X API quota.">
-                <MudButton Variant="Variant.Outlined" OnClick="SyncXFollowsAsync" Disabled="@(!CanStartSync)"
-                           StartIcon="@(syncing && syncingX ? null : Icons.Material.Filled.Sync)">
-                    @if (syncing && syncingX)
-                    {
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                        <span>Syncing… @syncCount</span>
-                    }
-                    else
-                    {
-                        <span>Sync X follows</span>
-                    }
-                </MudButton>
-            </MudTooltip>
+            <MudMenu Label="Sync follows" StartIcon="@Icons.Material.Filled.Sync" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                     Variant="Variant.Outlined" Disabled="@(!CanStartSync)" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                     aria-label="Sync follows">
+                @if (SyncPlatforms.Contains(Platform.Bluesky))
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Sync" OnClick="SyncFollowsAsync" Disabled="@string.IsNullOrWhiteSpace(blueskyHandle)">
+                        <div>Sync Bluesky follows</div>
+                        <div class="sp-menu-hint">@(string.IsNullOrWhiteSpace(blueskyHandle) ? "Set your Bluesky handle under Accounts first" : $"Everyone @{blueskyHandle} follows")</div>
+                    </MudMenuItem>
+                }
+                @if (SyncPlatforms.Contains(Platform.X))
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Sync" OnClick="SyncXFollowsAsync">
+                        <div>Sync X follows</div>
+                        <div class="sp-menu-hint">Your X API account's follows · uses X API quota</div>
+                    </MudMenuItem>
+                }
+                @if (SyncPlatforms.Contains(Platform.Mastodon))
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Sync" OnClick="SyncMastodonFollowsAsync">
+                        <div>Sync Mastodon follows</div>
+                        <div class="sp-menu-hint">Accounts your Mastodon account follows</div>
+                    </MudMenuItem>
+                }
+            </MudMenu>
         }
+
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.PeopleAlt" OnClick="HandleConflictsAsync"
+                   Disabled="@(busy || syncing || scanningConflicts || confirmingConflictScan || merging)">Handle conflicts</MudButton>
+
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" AriaLabel="More contact actions" Variant="Variant.Outlined"
+                 AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Disabled="@(busy || syncing || scanningConflicts || merging)">
+            <MudMenuItem Icon="@Icons.Material.Outlined.MergeType" OnClick="ToggleManualMerge">@(manualMerge ? "Cancel manual merge" : "Manual merge")</MudMenuItem>
+            <MudDivider Class="my-1" />
+            <MudMenuItem Icon="@Icons.Material.Outlined.FileDownload" OnClick="ExportAsync">
+                <div>Export contacts</div>
+                <div class="sp-menu-hint">JSON file for another SocialPoster instance</div>
+            </MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.FileUpload" OnClick="OpenImportPickerAsync">
+                <div>@(importing ? "Importing…" : "Import contacts")</div>
+                <div class="sp-menu-hint">Matching contacts gain missing accounts; nothing is overwritten</div>
+            </MudMenuItem>
+            <MudDivider Class="my-1" />
+            <div class="sp-menu-section" role="presentation">Danger zone</div>
+            @foreach (var platform in PurgePlatforms)
+            {
+                <MudMenuItem Icon="@Icons.Material.Outlined.LinkOff" IconColor="Color.Error" OnClick="() => PurgeAsync(platform)">Purge @PlatformInfo.Label(platform) identities…</MudMenuItem>
+            }
+            <MudMenuItem Icon="@Icons.Material.Outlined.DeleteForever" IconColor="Color.Error" OnClick="DeleteAllAsync">
+                <span class="sp-menu-danger">Delete all contacts…</span>
+            </MudMenuItem>
+        </MudMenu>
+        @* The picker is opened from the menu item; the upload component itself has no visible UI. *@
+        <MudFileUpload @ref="importUpload" T="IBrowserFile" Accept=".json,application/json" FilesChanged="ImportAsync" Class="d-none" />
     </Actions>
 </PageHeader>
 
@@ -80,7 +100,7 @@
         <MudText Typo="Typo.body2" Color="Color.Secondary">
             @if (conflictProgress is { } scan)
             {
-                <span>@scan.Completed.ToString("N0") / @scan.Total.ToString("N0") comparisons checked (@ConflictScanPercent.ToString("F0")%).</span>
+                <span>@scan.Completed.ToString("N0") / @scan.Total.ToString("N0") contacts checked (@ConflictScanPercent.ToString("F0")%).</span>
             }
             else
             {
@@ -98,18 +118,19 @@
 
 @if (conflicts is { Count: > 0 })
 {
-    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0">
-        <MudText Typo="Typo.h6">Suggested conflicts</MudText>
-        <MudText Class="mb-3">Suggestions are saved automatically so you can leave and return. They reflect the last requested scan, not a live scan. Suggestions are not proof that these are the same person. Nothing is merged automatically.</MudText>
-        @foreach (var conflict in conflicts)
-        {
-            <div class="d-flex align-center flex-wrap gap-2 mb-2">
-                <MudText>@conflict.Left.DisplayName (@conflict.Left.Key) / @conflict.Right.DisplayName (@conflict.Right.Key) — @conflict.Reason</MudText>
-                <MudButton Variant="Variant.Outlined" OnClick="() => ReviewMergeAsync(conflict)" Disabled="@(syncing || scanningConflicts || merging)">Review merge</MudButton>
-            </div>
-        }
-        <MudButton OnClick="DismissConflictsAsync" Disabled="@(scanningConflicts || merging)">Dismiss suggestions</MudButton>
-    </MudPaper>
+    var veryLikely = conflicts.Count(c => c.Score >= DuplicateLikelihood.VeryLikely);
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" Icon="@Icons.Material.Outlined.PeopleAlt" role="status">
+        <div class="d-flex align-center flex-wrap gap-2">
+            <span>
+                <strong>@conflicts.Count.ToString("N0") possible duplicate@(conflicts.Count == 1 ? "" : "s")</strong>
+                @(veryLikely > 0 ? $" · {veryLikely:N0} very likely" : "") — from your last conflict scan. Nothing is merged automatically.
+            </span>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="OpenConflictsAsync"
+                       Disabled="@(syncing || scanningConflicts || merging || busy)">Review duplicates</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="DismissConflictsAsync"
+                       Disabled="@(scanningConflicts || merging)">Dismiss</MudButton>
+        </div>
+    </MudAlert>
 }
 
 @if (manualMerge)
@@ -123,6 +144,11 @@
                 <MudChip T="int" Value="@selected.Id" OnClose="() => SetMergeSelection(selected, false)">@selected.DisplayName (@selected.Key)</MudChip>
             }
             <MudText Typo="Typo.body2">@mergeSelection.Count / 2 selected</MudText>
+            @if (SelectedLikelihood is { } selectedLikelihood)
+            {
+                <LikelihoodChip Score="@selectedLikelihood.Score" />
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(selectedLikelihood.HasSignal ? selectedLikelihood.Summary : "No duplicate evidence found")</MudText>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ManualMergeAsync"
                        Disabled="@(mergeSelection.Count != 2 || busy || syncing || scanningConflicts || merging)">Review selected merge</MudButton>
         </div>
@@ -135,6 +161,7 @@
         <div class="sp-card-header">
             <Avatar Url="@editing.AvatarUrl" Name="@editing.DisplayName" Size="32" />
             <MudText Typo="Typo.h6">@(editing.Id == 0 ? "New contact" : editing.DisplayName)</MudText>
+            <PlatformBadges Contact="editing" Platforms="@EnabledPlatforms.Platforms" Linkable="true" />
             <MudIconButton Icon="@Icons.Material.Filled.Close" Class="ms-auto" OnClick="() => editing = null" aria-label="Close" />
         </div>
         <div class="sp-card-body">
@@ -166,10 +193,6 @@
                                       HelperText="Fully qualified acct; lookup resolves local handles using your configured instance." />
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="LookupMastodonAsync"
                                    Disabled="@(busy || status?.Mastodon != true || string.IsNullOrWhiteSpace(editing.MastodonAcct))">Look up / verify</MudButton>
-                        @if (MastodonIdentity.ProfileUrl(editing.MastodonAcct) is { } profile)
-                        {
-                            <MudLink Href="@profile" Target="_blank">Open Mastodon profile</MudLink>
-                        }
                     </MudItem>
                 }
                 @if (EnabledPlatforms.Contains(Platform.Threads))
@@ -234,10 +257,6 @@
                             <MudButton Variant="Variant.Outlined" Class="mt-1" OnClick="LookupCompanyAsync" Disabled="@(busy || status?.LinkedIn != true || string.IsNullOrWhiteSpace(companyVanity))">Look up</MudButton>
                         </MudTooltip>
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(editing.LinkedInProfileUrl))
-                    {
-                        <MudText Typo="Typo.caption" Class="text-break">Profile: <MudLink Href="@editing.LinkedInProfileUrl" Target="_blank">@editing.LinkedInProfileUrl</MudLink></MudText>
-                    }
                 </MudItem>
                 }
 
@@ -313,6 +332,8 @@ else if (contactPage.TotalCount == 0)
 }
 else
 {
+    @PagingBar(contactPage, "mb-3")
+
     <MudPaper Class="sp-card" Elevation="0" Style="overflow:hidden">
         <MudSimpleTable Hover="true" Elevation="0" Class="sp-table" Style="overflow-x:auto">
             <thead>
@@ -347,7 +368,7 @@ else
                         <td><code class="key">{@@@c.Key}</code></td>
                         <td>
                             <div class="d-flex align-center gap-2">
-                                <PlatformBadges Contact="c" Platforms="@EnabledPlatforms.Platforms" />
+                                <PlatformBadges Contact="c" Platforms="@EnabledPlatforms.Platforms" Linkable="true" />
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">@ContactService.Describe(c, EnabledPlatforms.Platforms)</MudText>
                             </div>
                         </td>
@@ -362,13 +383,7 @@ else
         </MudSimpleTable>
     </MudPaper>
 
-    <div class="d-flex align-center justify-space-between flex-wrap gap-2 mt-3">
-        <MudText Typo="Typo.caption" Color="Color.Secondary">@contactPage.TotalCount contact@(contactPage.TotalCount == 1 ? "" : "s")</MudText>
-        @if (contactPage.TotalPages > 1)
-        {
-            <MudPagination Count="contactPage.TotalPages" Selected="contactPage.Page" SelectedChanged="GoToPageAsync" Size="Size.Small" Color="Color.Primary" />
-        }
-    </div>
+    @PagingBar(contactPage, "mt-3")
 }
 
 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
@@ -382,6 +397,42 @@ else
 
     private ContactPage? contactPage;
     private IReadOnlyList<ContactConflict>? conflicts;
+    // Remembered across openings of the suggestions dialog while on this page.
+    private int conflictMinLikelihood;
+    private bool reviewingConflicts;
+
+    private async Task OpenConflictsAsync()
+    {
+        if (conflicts is not { Count: > 0 } || reviewingConflicts || syncing || scanningConflicts || merging || busy) return;
+        reviewingConflicts = true;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<SuggestedConflictsDialog>("Possible duplicates", new DialogParameters
+            {
+                [nameof(SuggestedConflictsDialog.Conflicts)] = conflicts,
+                [nameof(SuggestedConflictsDialog.MinLikelihood)] = conflictMinLikelihood,
+                [nameof(SuggestedConflictsDialog.Review)] = (Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>>)ReviewFromDialogAsync,
+            }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: SuggestedConflictsDialog.DismissResult }) await DismissConflictsAsync();
+            else if (result is { Canceled: false, Data: int min }) conflictMinLikelihood = min;
+        }
+        finally
+        {
+            reviewingConflicts = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<IReadOnlyList<ContactConflict>?> ReviewFromDialogAsync(ContactConflict conflict)
+    {
+        await ReviewMergeAsync(conflict);
+        StateHasChanged();
+        return conflicts;
+    }
+
+    private DuplicateLikelihood? SelectedLikelihood => mergeSelection.Count == 2
+        ? ContactService.ScoreDuplicate(mergeSelection.Values.First(), mergeSelection.Values.Last()) : null;
     private bool manualMerge;
     private bool merging;
     private readonly Dictionary<int, Contact> mergeSelection = [];
@@ -410,7 +461,8 @@ else
     private HashSet<Platform>? previousPlatforms;
     private ContactSort sort = ContactSort.NameAsc;
     private int pageNumber = 1;
-    private const int PageSize = 25;
+    private int pageSize = 25;
+    private static readonly int[] PageSizeOptions = [10, 25, 50, 100, 200];
     private Contact? editing;
     private string? editError;
     private string? companyVanity;
@@ -488,7 +540,7 @@ else
 
     private async Task LoadPageAsync()
     {
-        var query = new ContactQuery(Filter: filter, Sort: sort, Page: pageNumber, PageSize: PageSize,
+        var query = new ContactQuery(Filter: filter, Sort: sort, Page: pageNumber, PageSize: pageSize,
             Platforms: EnabledPlatforms.Platforms,
             LinkedPlatforms: shownPlatforms.SetEquals(EnabledPlatforms.Platforms) ? null : shownPlatforms.ToArray());
         contactPage = await ContactSvc.ListAsync(query);
@@ -500,6 +552,33 @@ else
         pageNumber = p;
         return LoadPageAsync();
     }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        // Keep the first contact currently shown on screen in the new page.
+        var firstIndex = (pageNumber - 1) * pageSize;
+        pageSize = size;
+        pageNumber = firstIndex / size + 1;
+        return LoadPageAsync();
+    }
+
+    private RenderFragment PagingBar(ContactPage current, string cssClass) =>
+        @<div class="d-flex align-center justify-space-between flex-wrap gap-2 @cssClass">
+            <div class="d-flex align-center gap-3">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@current.TotalCount contact@(current.TotalCount == 1 ? "" : "s")</MudText>
+                <MudSelect T="int" Value="pageSize" ValueChanged="SetPageSizeAsync" Label="Per page" Variant="Variant.Outlined"
+                           Margin="Margin.Dense" Dense="true" Style="width:110px" aria-label="Contacts per page">
+                    @foreach (var size in PageSizeOptions)
+                    {
+                        <MudSelectItem T="int" Value="size">@size</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            @if (current.TotalPages > 1)
+            {
+                <MudPagination Count="current.TotalPages" Selected="current.Page" SelectedChanged="GoToPageAsync" Size="Size.Small" Color="Color.Primary" />
+            }
+        </div>;
 
     private async Task StartEditAndScrollAsync(Contact c)
     {
@@ -555,6 +634,92 @@ else
         }
     }
 
+    private const long MaxImportBytes = 20 * 1024 * 1024;
+    private bool importing;
+    private MudFileUpload<IBrowserFile>? importUpload;
+
+    /// <summary>Platforms whose follows can be synced here, in menu order.</summary>
+    private IReadOnlyList<Platform> SyncPlatforms => new[] { Platform.Bluesky, Platform.X, Platform.Mastodon }.Where(p => p switch
+    {
+        Platform.Bluesky => EnabledPlatforms.Contains(Platform.Bluesky),
+        Platform.X => canSyncX,
+        Platform.Mastodon => EnabledPlatforms.Contains(Platform.Mastodon) && status?.Mastodon == true,
+        _ => false
+    }).ToList();
+
+    /// <summary>Platforms offered in the purge section of the overflow menu.</summary>
+    private IReadOnlyList<Platform> PurgePlatforms => EnabledPlatforms.Platforms;
+
+    private bool HasSyncSource => SyncPlatforms.Count > 0;
+
+    private async Task OpenImportPickerAsync()
+    {
+        if (importUpload is not null && !busy && !syncing && !scanningConflicts && !merging)
+            await importUpload.OpenFilePickerAsync();
+    }
+
+    private async Task ExportAsync()
+    {
+        if (busy || syncing || scanningConflicts || merging) return;
+        busy = true;
+        try
+        {
+            var json = await ContactSvc.ExportJsonAsync();
+            var fileName = $"socialposter-contacts-{DateTime.Now:yyyy-MM-dd}.json";
+            var savedTo = await JS.InvokeAsync<string?>("socialPoster.downloadFile", fileName, json, "application/json");
+            Flash(savedTo is null ? $"Exported contacts to {fileName}." : $"Exported contacts to {savedTo}.");
+        }
+        catch (Exception ex) { Flash($"Export failed: {ex.Message}", true); }
+        finally { busy = false; }
+    }
+
+    private async Task ImportAsync(IBrowserFile? file)
+    {
+        if (file is null || busy || syncing || scanningConflicts || merging) return;
+        busy = importing = true;
+        try
+        {
+            if (file.Size > MaxImportBytes)
+            {
+                Flash($"{file.Name} is larger than {MaxImportBytes / 1024 / 1024} MB, so it can't be a contacts export.", true);
+                return;
+            }
+            string json;
+            await using (var stream = file.OpenReadStream(MaxImportBytes))
+            using (var reader = new StreamReader(stream))
+                json = await reader.ReadToEndAsync();
+            var result = await ContactSvc.ImportJsonAsync(json);
+            editing = null;
+            mergeSelection.Clear();
+            Flash($"Imported {file.Name}: {result}", result.Skipped > 0 && result.Added + result.Updated == 0);
+            await LoadAsync();
+        }
+        catch (Exception ex) { Flash($"Import failed: {ex.Message}", true); }
+        finally { busy = importing = false; }
+    }
+
+    private async Task DeleteAllAsync()
+    {
+        if (busy || syncing || scanningConflicts || merging) return;
+        busy = true;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<DeleteAllContactsDialog>("Delete all contacts", new DialogParameters(),
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small });
+            if (await dialog.Result is { Canceled: false, Data: int deleted })
+            {
+                editing = null;
+                conflicts = null;
+                mergeSelection.Clear();
+                Flash($"Deleted {deleted:N0} contact{(deleted == 1 ? "" : "s")}.");
+                await PersistConflictsAsync();
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex) { Flash(ex.Message, true); }
+        finally { busy = false; }
+    }
+
     private async Task PurgeAsync(Platform platform)
     {
         if (!EnabledPlatforms.Contains(platform) || busy || syncing || scanningConflicts) return;
@@ -585,12 +750,17 @@ else
         try
         {
             if (await Dialogs.ShowMessageBoxAsync("Check contacts for conflicts",
-                "This compares your contacts to find possible duplicates. With lots of contacts, it may take some time. You will see progress while it runs. Nothing is merged automatically.",
+                "This checks your contacts for possible duplicates and scores each pair from 1 to 99 by how likely they are the same person. With lots of contacts, it may take a moment. You will see progress while it runs. Nothing is merged automatically.",
                 yesText: "Start scan", cancelText: "Cancel") != true) return;
             message = null;
             messageIsError = false;
             await ScanConflictsAsync();
             if (conflicts?.Count == 0 && !messageIsError) Flash("No suggested conflicts found.");
+            else if (conflicts is { Count: > 0 })
+            {
+                confirmingConflictScan = false;
+                await OpenConflictsAsync();
+            }
         }
         catch (Exception ex) { Flash(ex.Message, true); }
         finally { confirmingConflictScan = false; }

@@ -22,8 +22,9 @@
         <ApplicationDisplayVersion>0.6.6</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
-        <!-- Run unpackaged on Windows, like a normal desktop exe. See https://aka.ms/MauiTemplateUnpackaged -->
-        <WindowsPackageType>None</WindowsPackageType>
+        <!-- Run unpackaged on Windows, like a normal desktop exe. See https://aka.ms/MauiTemplateUnpackaged
+             Pass -p:WindowsPackageType=MSIX to build the Microsoft Store package instead. -->
+        <WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
 
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
@@ -45,6 +46,27 @@
         <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
     </PropertyGroup>
 
+    <!-- Microsoft Store (MSIX) package. Copy the three Store* values from Partner Center: Product management >
+         Product identity (Package/Identity/Name, Package/Identity/Publisher, Package/Properties/PublisherDisplayName). -->
+    <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(WindowsPackageType)' == 'MSIX'">
+        <StoreIdentityName Condition="'$(StoreIdentityName)' == ''">37828IsaacLevin.SocialPoster</StoreIdentityName>
+        <StorePublisher Condition="'$(StorePublisher)' == ''">CN=82A4CBF8-0920-4FD3-B44C-A9D0D7BB5865</StorePublisher>
+        <StorePublisherDisplayName Condition="'$(StorePublisherDisplayName)' == ''">Isaac Levin</StorePublisherDisplayName>
+        <!-- The Store requires the fourth (revision) part of the package version to be 0. -->
+        <StorePackageVersion Condition="'$(StorePackageVersion)' == ''">$(ApplicationDisplayVersion).0</StorePackageVersion>
+
+        <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+        <!-- The Store signs packages on submission. To sideload a test build, pass -p:AppxPackageSigningEnabled=true
+             and -p:PackageCertificateThumbprint=<thumbprint of a cert whose subject matches StorePublisher>. -->
+        <AppxPackageSigningEnabled Condition="'$(AppxPackageSigningEnabled)' == ''">false</AppxPackageSigningEnabled>
+        <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
+        <!-- Keep the manifest's TargetDeviceFamily (MinVersion 19041 for the virtualization exclusion, a current
+             MaxVersionTested) instead of letting the packaging tools regenerate it from the properties below. -->
+        <AppxAddDefaultTargetDeviceFamilyItem>false</AppxAddDefaultTargetDeviceFamilyItem>
+        <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+        <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    </PropertyGroup>
+
     <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
         <!-- Both architectures so the app runs on Intel and Apple silicon Macs. -->
         <RuntimeIdentifiers>maccatalyst-x64;maccatalyst-arm64</RuntimeIdentifiers>
@@ -61,8 +83,9 @@
     </PropertyGroup>
 
     <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
-        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#5B5BF0" />
-        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#5B5BF0" BaseSize="128,128" />
+        <!-- No Color on the icon so the rounded background keeps its transparent corners. -->
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" />
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#4F46E5" BaseSize="128,128" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
@@ -76,5 +99,30 @@
     <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
         <ProjectReference Update="..\SocialPoster.Components\SocialPoster.Components.csproj" AdditionalProperties="CopilotSkipCliDownload=true" />
     </ItemGroup>
+
+    <!-- MAUI generates the final Package.appxmanifest from Platforms\Windows\Package.appxmanifest. Stamp the Store
+         identity and version onto that generated copy so they're set in one place (the properties above). -->
+    <Target Name="_SocialPosterStampStoreIdentity" AfterTargets="MauiGeneratePackageAppxManifest"
+            Condition="'$(WindowsPackageType)' == 'MSIX' and '@(AppxManifest)' != ''">
+        <Error Condition="$(StoreIdentityName.StartsWith('TODO')) or $(StorePublisher.Contains('TODO'))"
+               Text="Set StoreIdentityName and StorePublisher in SocialPoster.MAUI.csproj (or pass them with -p:) to the values from Partner Center before building the Store package." />
+        <PropertyGroup>
+            <_SocialPosterAppxNs>&lt;Namespace Prefix='m' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10' /&gt;</_SocialPosterAppxNs>
+        </PropertyGroup>
+        <XmlPoke XmlInputPath="@(AppxManifest)" Namespaces="$(_SocialPosterAppxNs)" Query="/m:Package/m:Identity/@Name" Value="$(StoreIdentityName)" />
+        <XmlPoke XmlInputPath="@(AppxManifest)" Namespaces="$(_SocialPosterAppxNs)" Query="/m:Package/m:Identity/@Publisher" Value="$(StorePublisher)" />
+        <XmlPoke XmlInputPath="@(AppxManifest)" Namespaces="$(_SocialPosterAppxNs)" Query="/m:Package/m:Identity/@Version" Value="$(StorePackageVersion)" />
+        <XmlPoke XmlInputPath="@(AppxManifest)" Namespaces="$(_SocialPosterAppxNs)" Query="/m:Package/m:Properties/m:PublisherDisplayName" Value="$(StorePublisherDisplayName)" />
+    </Target>
+
+    <!-- Core and Components copy the Copilot CLI for the build machine (x64) into runtimes\win-x64; a non-x64 app has its
+         own copy, so leave the x64 one out of the MSIX (CI deletes it from the zip for the same reason). -->
+    <Target Name="_SocialPosterTrimForeignCopilotCli" AfterTargets="_ComputeAppxPackagePayload"
+            Condition="'$(WindowsPackageType)' == 'MSIX' and '$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64'">
+        <ItemGroup>
+            <AppxPackagePayload Remove="@(AppxPackagePayload)"
+                                Condition="$([System.String]::Copy('%(AppxPackagePayload.TargetPath)').StartsWith('runtimes\win-x64\', StringComparison.OrdinalIgnoreCase))" />
+        </ItemGroup>
+    </Target>
 
 </Project>

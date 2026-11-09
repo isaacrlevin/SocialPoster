@@ -9,6 +9,16 @@
             Mentions of deleted contacts become unknown. Contacts with other accounts and published history are preserved. This cannot be undone.
         </MudAlert>
         <MudText>@impactCount contacts currently have identity or verification data to remove. Cached candidates are cleared even when this count is zero.</MudText>
+        @if (importedSurvivors > 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3">
+                @importedSurvivors contact@(importedSurvivors == 1 ? " was" : "s were") imported from @PlatformInfo.Label(TargetPlatform) but still
+                @(importedSurvivors == 1 ? "has" : "have") other linked accounts (often added from links in the @PlatformInfo.Label(TargetPlatform) bio).
+                A plain purge keeps them with their @PlatformInfo.Label(TargetPlatform) name, avatar and bio, so re-importing can flag them as possible duplicates.
+            </MudAlert>
+            <MudCheckBox T="bool" @bind-Value="deleteImported"
+                         Label="@($"Also delete these {importedSurvivors} contacts imported from {PlatformInfo.Label(TargetPlatform)}")" />
+        }
         <MudText Class="mt-2">Future explicit imports, searches or bio refreshes can link accounts again. In-flight discovery results will be discarded.</MudText>
         <MudCheckBox T="bool" @bind-Value="confirmed" Label="@($"I confirm removal of all {PlatformInfo.Label(TargetPlatform)} identities")" />
         @if (error is not null)
@@ -26,11 +36,17 @@
     [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter] public Platform TargetPlatform { get; set; }
     private int impactCount;
+    private int importedSurvivors;
+    private bool deleteImported;
     private bool confirmed;
     private bool busy;
     private string? error;
 
-    protected override async Task OnInitializedAsync() => impactCount = await ContactSvc.CountPurgeAsync(TargetPlatform);
+    protected override async Task OnInitializedAsync()
+    {
+        impactCount = await ContactSvc.CountPurgeAsync(TargetPlatform);
+        importedSurvivors = await ContactSvc.CountImportedSurvivorsAsync(TargetPlatform);
+    }
 
     private async Task PurgeAsync()
     {
@@ -38,7 +54,7 @@
         busy = true;
         try
         {
-            await ContactSvc.PurgePlatformAsync(TargetPlatform);
+            await ContactSvc.PurgePlatformAsync(TargetPlatform, deleteImported);
             Dialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex) { error = ex.Message; }

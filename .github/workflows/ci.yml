@@ -109,6 +109,55 @@ jobs:
             artifacts/*-setup.exe
           retention-days: 7
 
+  # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). Upload the
+  # artifacts to Partner Center by hand. Until the Store* identity in SocialPoster.MAUI.csproj is filled in, this
+  # builds with a placeholder identity to check that packaging still works, and uploads nothing.
+  desktop-windows-store:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - { rid: win-x64, arch: x64 }
+          - { rid: win-arm64, arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet workload install maui-windows
+      - name: Check Store identity
+        id: identity
+        shell: pwsh
+        run: |
+          if (Select-String -Path src/SocialPoster.MAUI/SocialPoster.MAUI.csproj -Pattern '<Store(IdentityName|Publisher)[^>]*>[^<]*TODO' -Quiet) {
+            echo "::warning::The Store identity in SocialPoster.MAUI.csproj isn't set yet; building with a placeholder and skipping the upload."
+            "args=-p:StoreIdentityName=Placeholder.SocialPoster -p:StorePublisher=CN=00000000-0000-0000-0000-000000000000" >> $env:GITHUB_OUTPUT
+            "configured=false" >> $env:GITHUB_OUTPUT
+          } else {
+            "configured=true" >> $env:GITHUB_OUTPUT
+          }
+      - name: Publish MSIX
+        run: >-
+          dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
+          --framework net10.0-windows10.0.19041.0 --runtime ${{ matrix.rid }} --self-contained true
+          -p:WindowsPackageType=MSIX -p:AppxPackageDir=../../artifacts/msix/
+          ${{ steps.identity.outputs.args }}
+        working-directory: src
+      - name: Collect package
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem artifacts/msix -Recurse -Filter "SocialPoster*_${{ matrix.arch }}.msix" | Select-Object -First 1
+          if (-not $msix) { throw 'No MSIX package found in artifacts/msix.' }
+          New-Item -ItemType Directory -Force artifacts/store | Out-Null
+          Copy-Item $msix.FullName artifacts/store/
+          Get-ChildItem artifacts/store
+      - uses: actions/upload-artifact@v4
+        if: steps.identity.outputs.configured == 'true'
+        with:
+          name: store-windows-${{ matrix.arch }}
+          path: artifacts/store/*.msix
+          retention-days: 30
+
   # Desktop app for macOS (Mac Catalyst, Intel and Apple silicon). Can only be built on macOS.
   desktop-macos:
     runs-on: macos-latest

@@ -774,6 +774,73 @@ public class FollowImportTests
         Assert.Null(Assert.Single(await host.AllAsync()).XUserId);
     }
 
+    [Fact]
+    public async Task Bluesky_import_auto_links_saved_X_contact_with_identical_name_and_username()
+    {
+        await using var host = await ImportHost.CreateAsync();
+        var saved = new Contact { Key = "janedoe", DisplayName = "Jane Doe", XUsername = "JaneDoe", XUserId = "1", UseCount = 4 };
+        await host.AddAsync(saved);
+        var result = await host.Contacts.EnsureFromBlueskyAsync(
+            new("did:plc:jane", "janedoe.bsky.social", "Jane Doe", null, ""), ContactSource.BlueskyFollows);
+        Assert.False(result.Created);
+        Assert.True(result.AutoLinked);
+        Assert.Contains(result.Notes, n => n.Contains("Auto-linked") && n.Contains("janedoe"));
+        var actual = Assert.Single(await host.AllAsync());
+        Assert.Equal(("janedoe", "did:plc:jane", "janedoe.bsky.social", 4),
+            (actual.Key, actual.BlueskyDid, actual.BlueskyHandle, actual.UseCount));
+    }
+
+    [Fact]
+    public async Task X_import_auto_links_saved_Bluesky_contact_with_identical_name_and_username()
+    {
+        await using var host = await ImportHost.CreateAsync();
+        await host.AddAsync(new() { Key = "janedoe", DisplayName = "Jane Doe", BlueskyHandle = "janedoe.bsky.social" });
+        var result = await host.Contacts.EnsureFromXAsync(new("123", "Jane Doe", "janedoe", null, ""), ContactSource.XFollows);
+        Assert.True(result.AutoLinked);
+        Assert.Equal("123", Assert.Single(await host.AllAsync()).XUserId);
+    }
+
+    [Theory]
+    [InlineData("short-username")]
+    [InlineData("different-name")]
+    [InlineData("already-on-platform")]
+    [InlineData("two-candidates")]
+    [InlineData("saved-bio-links-elsewhere")]
+    [InlineData("incoming-bio-links-elsewhere")]
+    public async Task Auto_link_stays_narrow(string scenario)
+    {
+        await using var host = await ImportHost.CreateAsync();
+        var username = scenario == "short-username" ? "jane" : "janedoe";
+        await host.AddAsync(new()
+        {
+            Key = "saved", DisplayName = scenario == "different-name" ? "Jane Smith" : "Jane Doe", XUsername = username,
+            BlueskyHandle = scenario == "already-on-platform" ? "otherjane.bsky.social" : null,
+            BlueskyDid = scenario == "already-on-platform" ? "did:plc:otherjane" : null,
+            Bio = scenario == "saved-bio-links-elsewhere" ? "Also https://bsky.app/profile/someoneelse.bsky.social" : null,
+        });
+        if (scenario == "two-candidates")
+            await host.AddAsync(new() { Key = "saved2", DisplayName = "Jane Doe", MastodonAcct = $"{username}@social.example" });
+        var bio = scenario == "incoming-bio-links-elsewhere" ? "X: https://x.com/notjane" : "";
+        var result = await host.Contacts.EnsureFromBlueskyAsync(
+            new("did:plc:jane", $"{username}.bsky.social", "Jane Doe", null, bio), ContactSource.BlueskyFollows);
+        Assert.True(result.Created);
+        Assert.False(result.AutoLinked);
+    }
+
+    [Fact]
+    public async Task Review_sync_auto_links_without_prompting_and_reports_the_count()
+    {
+        await using var host = await ImportHost.CreateAsync();
+        await host.AddAsync(new() { Key = "janedoe", DisplayName = "Jane Doe", XUsername = "janedoe" });
+        host.Http.Add("""{"follows":[{"did":"did:plc:jane","handle":"janedoe.bsky.social","displayName":"Jane Doe","description":""}]}""");
+        var result = await host.Contacts.SyncBlueskyFollowsAsync("self.bsky.social",
+            reviewer: (_, _) => throw new InvalidOperationException("The reviewer should not be asked."));
+        Assert.Equal((0, 1, 1), (result.Added, result.Updated, result.AutoLinked));
+        Assert.Contains("1 auto-linked", result.ToString());
+        Assert.Contains("Jane Doe", result.ToString());
+        Assert.Single(await host.AllAsync());
+    }
+
     // The outer task performs configuration only, exposing the in-flight sync for pause assertions.
     private static async Task<Task<FollowImportResult>> StartReviewSyncAsync(ImportHost host, Platform platform,
         ContactImportReviewer? reviewer, IProgress<int>? progress = null, CancellationToken ct = default)

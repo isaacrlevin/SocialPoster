@@ -2,32 +2,110 @@
 
 <MudDialog>
     <DialogContent>
-        <MudText Class="mb-3">Review both contacts. Similarity is not proof of identity. @(ImportMode ? "The incoming account is not saved. The saved contact keeps its metadata." : "Choose a survivor.") Resolve every platform collision before confirming.</MudText>
-        @foreach (var contact in new[] { Preview.Left, Preview.Right })
-        {
-            <MudPaper Outlined="true" Class="pa-3 mb-3">
-                <div class="d-flex align-center gap-2 mb-2">
-                    <Avatar Url="@contact.AvatarUrl" Name="@contact.DisplayName" Size="48" />
-                    <MudText Typo="Typo.h6">@contact.DisplayName — @MentionTemplate.Token(contact.Key)</MudText>
-                </div>
-                <MudText>Bio: @contact.Bio</MudText>
-                <MudText>Source: @contact.Source · Created: @contact.CreatedAtUtc · Used: @contact.UseCount · Last used: @contact.LastUsedAtUtc</MudText>
-                @foreach (var platform in Enum.GetValues<Platform>())
-                {
-                    <MudText>@IdentityDescription(contact, platform)</MudText>
-                    @if (ProfileUrl(contact, platform) is { } url)
+        <div class="merge-score">
+            <div class="d-flex align-center flex-wrap gap-2">
+                <MudText Typo="Typo.subtitle1" Class="fw-semibold">Duplicate likelihood</MudText>
+                <LikelihoodChip Score="@likelihood.Score" />
+                <MudTooltip Text="Positive signals combine; different accounts on the same platform lower the score. Scores range 1–99 and are never proof.">
+                    <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" Color="Color.Secondary" aria-label="How the score works" />
+                </MudTooltip>
+            </div>
+            @if (likelihood.Evidence.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">No shared identities, profile links, usernames or similar names were found.</MudText>
+            }
+            else
+            {
+                <ul class="merge-evidence" aria-label="Likelihood evidence">
+                    @foreach (var item in likelihood.Evidence.OrderByDescending(e => e.Points))
                     {
-                        <MudButton Href="@url" Target="_blank" rel="noopener noreferrer"
-                                   Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">
-                            Open @PlatformInfo.Label(platform) profile
-                        </MudButton>
+                        <li>
+                            <span class="merge-points @(item.Points > 0 ? "pos" : "neg")">@(item.Points > 0 ? $"+{item.Points}" : $"−{-item.Points}")</span>
+                            <span>@item.Description</span>
+                        </li>
                     }
+                </ul>
+            }
+        </div>
+
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+            Similarity is not proof of identity.
+            @(ImportMode ? "The incoming account is not saved; the saved contact keeps its metadata." : "Choose a survivor.")
+            @(Preview.Collisions.Count > 0 ? "Resolve every platform collision before confirming." : "")
+        </MudText>
+
+        <div class="merge-contacts">
+            @foreach (var contact in new[] { Preview.Left, Preview.Right })
+            {
+                var isSurvivor = !ImportMode && contact.Id == survivorId;
+                <section class="merge-contact @(isSurvivor ? "survivor" : "")" aria-label="@contact.DisplayName">
+                    <div class="d-flex align-center gap-2">
+                        <Avatar Url="@contact.AvatarUrl" Name="@contact.DisplayName" Size="40" />
+                        <div class="merge-name">
+                            <span class="merge-title merge-ellipsis">@contact.DisplayName</span>
+                            <code class="key">@MentionTemplate.Token(contact.Key)</code>
+                        </div>
+                        @if (isSurvivor)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined" Class="ml-auto">Survivor</MudChip>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                        @contact.Source · created @contact.CreatedAtUtc.ToLocalTime().ToString("d") · used @contact.UseCount time@(contact.UseCount == 1 ? "" : "s")
+                    </MudText>
+                    @if (!string.IsNullOrWhiteSpace(contact.Bio))
+                    {
+                        <div class="merge-bio" title="@contact.Bio">@contact.Bio</div>
+                    }
+                    <ul class="merge-accounts" aria-label="@($"{contact.DisplayName} accounts")">
+                        @foreach (var platform in Enum.GetValues<Platform>().Where(p => HasAny(contact, p)))
+                        {
+                            <li>
+                                <span class="merge-platform" aria-hidden="true">@PlatformInfo.Icon(platform)</span>
+                                <span class="merge-ellipsis" title="@IdentityDescription(contact, platform)">@PrimaryLabel(contact, platform)</span>
+                                @if (Preview.Collisions.Contains(platform))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined" Class="ma-0">Conflict</MudChip>
+                                }
+                                @if (ProfileUrl(contact, platform) is { } url)
+                                {
+                                    <MudIconButton Href="@url" Target="_blank" rel="noopener noreferrer" Size="Size.Small"
+                                                   Icon="@Icons.Material.Filled.OpenInNew" aria-label="@($"Open {PlatformInfo.Label(platform)} profile")" />
+                                }
+                            </li>
+                        }
+                        @if (!Enum.GetValues<Platform>().Any(p => HasAny(contact, p)))
+                        {
+                            <li><MudText Typo="Typo.body2" Color="Color.Secondary">No linked accounts</MudText></li>
+                        }
+                    </ul>
+                </section>
+            }
+        </div>
+
+        <MudButton Variant="Variant.Text" Size="Size.Small" Class="mb-2" OnClick="() => showDetails = !showDetails"
+                   EndIcon="@(showDetails ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                   aria-expanded="@(showDetails ? "true" : "false")">@(showDetails ? "Hide" : "Show") full identity details</MudButton>
+        <MudCollapse Expanded="@showDetails">
+            <div class="merge-contacts mb-3">
+                @foreach (var contact in new[] { Preview.Left, Preview.Right })
+                {
+                    <div class="merge-details">
+                        <MudText Typo="Typo.caption" Class="fw-semibold d-block">@contact.Key</MudText>
+                        <MudText Typo="Typo.caption" Class="d-block">Bio: @contact.Bio</MudText>
+                        <MudText Typo="Typo.caption" Class="d-block">Created @contact.CreatedAtUtc · Last used @(contact.LastUsedAtUtc?.ToString() ?? "never")</MudText>
+                        @foreach (var platform in Enum.GetValues<Platform>())
+                        {
+                            <MudText Typo="Typo.caption" Class="d-block">@IdentityDescription(contact, platform)</MudText>
+                        }
+                    </div>
                 }
-            </MudPaper>
-        }
+            </div>
+        </MudCollapse>
+
         @if (!ImportMode)
         {
-            <MudSelect T="int" @bind-Value="survivorId" @bind-Value:after="ResetConfirmation" Label="Surviving contact" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelect T="int" @bind-Value="survivorId" @bind-Value:after="ResetConfirmation" Label="Surviving contact" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
                 <MudSelectItem T="int" Value="0">Choose a survivor</MudSelectItem>
                 @foreach (var contact in new[] { Preview.Left, Preview.Right })
                 {
@@ -38,7 +116,7 @@
         @foreach (var platform in Preview.Collisions)
         {
             <MudSelect T="int" Value="@choices.GetValueOrDefault(platform)" ValueChanged="value => SetChoice(platform, value)"
-                       Label="@($"Keep which {PlatformInfo.Label(platform)} identity?")" Variant="Variant.Outlined" Class="mb-3">
+                       Label="@($"Keep which {PlatformInfo.Label(platform)} identity?")" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
                 <MudSelectItem T="int" Value="0">Resolve collision</MudSelectItem>
                 @foreach (var contact in new[] { Preview.Left, Preview.Right })
                 {
@@ -46,19 +124,29 @@
                 }
             </MudSelect>
         }
-        <MudAlert Severity="Severity.Warning">
-            The survivor keeps its key, name, bio, avatar, source and creation time, including user edits.
-            Complementary identities and usage counts are combined; latest usage time is kept.
-            Each selected identity replaces the whole conflicting platform identity, including its verification.
-            @if (ImportMode)
-            {
-                <span>No incoming row or key has been saved. Existing keys, aliases, history and usage remain attached to the saved contact. The decision is rechecked before saving.</span>
-            }
-            else
-            {
-                <span>The other contact row is deleted. Its key and any earlier aliases still resolve to the survivor in templates, history and browser drafts.</span>
-            }
-            Conflicting or running discovery caches are explicitly invalidated. This cannot be undone.
+
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+            <div>
+                @(ImportMode ? "The saved contact absorbs this account." : "The other contact is deleted; its key keeps working as an alias.") This cannot be undone.
+                <MudLink Typo="Typo.body2" Underline="Underline.Always" OnClick="() => showConsequences = !showConsequences"
+                         aria-expanded="@(showConsequences ? "true" : "false")">@(showConsequences ? "Show less" : "What happens?")</MudLink>
+            </div>
+            <MudCollapse Expanded="@showConsequences">
+                <div class="mt-1">
+                    The survivor keeps its key, name, bio, avatar, source and creation time, including user edits.
+                    Complementary identities and usage counts are combined; latest usage time is kept.
+                    Each selected identity replaces the whole conflicting platform identity, including its verification.
+                    @if (ImportMode)
+                    {
+                        <span>No incoming row or key has been saved. Existing keys, aliases, history and usage remain attached to the saved contact. The decision is rechecked before saving.</span>
+                    }
+                    else
+                    {
+                        <span>The other contact row is deleted. Its key and any earlier aliases still resolve to the survivor in templates, history and browser drafts.</span>
+                    }
+                    Conflicting or running discovery caches are explicitly invalidated.
+                </div>
+            </MudCollapse>
         </MudAlert>
         <MudCheckBox T="bool" @bind-Value="confirmed" Label="I confirm these are the same contact and approve this merge" />
         @if (error is not null)
@@ -76,11 +164,15 @@
     [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter, EditorRequired] public ContactMergePreview Preview { get; set; } = default!;
     [Parameter] public bool ImportMode { get; set; }
+    private DuplicateLikelihood likelihood = new(0, []);
     protected override void OnInitialized()
     {
         if (ImportMode) survivorId = Preview.Left.Id;
+        likelihood = ContactService.ScoreDuplicate(Preview.Left, Preview.Right);
     }
     private int survivorId;
+    private bool showDetails;
+    private bool showConsequences;
     private readonly Dictionary<Platform, int> choices = [];
     private bool confirmed;
     private bool busy;
@@ -115,35 +207,37 @@
         finally { busy = false; }
     }
 
+    private static bool HasAny(Contact c, Platform p) => p switch
+    {
+        Platform.X => !string.IsNullOrWhiteSpace(c.XUsername) || !string.IsNullOrWhiteSpace(c.XUserId),
+        Platform.Bluesky => !string.IsNullOrWhiteSpace(c.BlueskyHandle) || !string.IsNullOrWhiteSpace(c.BlueskyDid),
+        Platform.Mastodon => !string.IsNullOrWhiteSpace(c.MastodonAcct) || !string.IsNullOrWhiteSpace(c.MastodonUri) ||
+            !string.IsNullOrWhiteSpace(c.MastodonProfileUrl),
+        Platform.LinkedIn => !string.IsNullOrWhiteSpace(c.LinkedInProfileUrl) || !string.IsNullOrWhiteSpace(c.LinkedInUrn) ||
+            !string.IsNullOrWhiteSpace(c.LinkedInName),
+        Platform.Threads => !string.IsNullOrWhiteSpace(c.ThreadsUsername),
+        _ => false
+    };
+
+    // One short identity per platform; full IDs live in the details section and the tooltip.
+    private static string PrimaryLabel(Contact c, Platform p) => p switch
+    {
+        Platform.X => !string.IsNullOrWhiteSpace(c.XUsername) ? "@" + c.XUsername.Trim().TrimStart('@') : $"ID {c.XUserId}",
+        Platform.Bluesky => !string.IsNullOrWhiteSpace(c.BlueskyHandle) ? "@" + c.BlueskyHandle.Trim().TrimStart('@') : c.BlueskyDid ?? "",
+        Platform.Mastodon => !string.IsNullOrWhiteSpace(c.MastodonAcct) ? "@" + c.MastodonAcct.Trim().TrimStart('@')
+            : c.MastodonProfileUrl ?? c.MastodonUri ?? "",
+        Platform.Threads => "@" + c.ThreadsUsername?.Trim().TrimStart('@'),
+        _ => c.LinkedInName ?? c.LinkedInProfileUrl ?? c.LinkedInUrn ?? ""
+    };
+
     private static string IdentityDescription(Contact c, Platform p) => p switch
     {
         Platform.X => $"X: {c.XUsername ?? "(none)"} · ID: {c.XUserId ?? "(none)"} · verified: {c.XVerifiedByCopilotAtUtc}",
         Platform.Bluesky => $"Bluesky: {c.BlueskyHandle ?? "(none)"} · DID: {c.BlueskyDid ?? "(none)"}",
+        Platform.Threads => $"Threads: {c.ThreadsUsername ?? "(none)"}",
         Platform.Mastodon => $"Mastodon: {c.MastodonAcct ?? "(none)"} · Actor: {c.MastodonUri ?? "(none)"} · Profile: {c.MastodonProfileUrl ?? "(none)"}",
         _ => $"LinkedIn: {c.LinkedInName ?? "(none)"} · {c.LinkedInProfileUrl ?? "(none)"} · URN: {c.LinkedInUrn ?? "(none)"} · verified: {c.LinkedInVerifiedByCopilotAtUtc}"
     };
 
-    private static string? ProfileUrl(Contact contact, Platform platform)
-    {
-        if (platform == Platform.Mastodon) return MastodonIdentity.ProfileUrl(contact.MastodonAcct);
-        if (platform == Platform.X && !string.IsNullOrWhiteSpace(contact.XUsername))
-            return AccountCandidates.Normalize([new("X", null, contact.XUsername, null, null, 100, null)])
-                .SingleOrDefault()?.Url;
-        if (platform == Platform.Bluesky)
-        {
-            var identity = !string.IsNullOrWhiteSpace(contact.BlueskyDid) ? contact.BlueskyDid : contact.BlueskyHandle;
-            return string.IsNullOrWhiteSpace(identity) ? null : $"https://bsky.app/profile/{Uri.EscapeDataString(identity.Trim().TrimStart('@'))}";
-        }
-        if (platform == Platform.LinkedIn)
-        {
-            if (!string.IsNullOrWhiteSpace(contact.LinkedInProfileUrl))
-                return AccountCandidates.Normalize([new("LinkedIn", null, contact.LinkedInProfileUrl, null, null, 100, null)])
-                    .SingleOrDefault()?.Url;
-            const string prefix = "urn:li:organization:";
-            if (contact.LinkedInUrn?.StartsWith(prefix, StringComparison.Ordinal) == true &&
-                contact.LinkedInUrn[prefix.Length..] is { Length: > 0 } id && id.All(char.IsAsciiDigit))
-                return $"https://www.linkedin.com/company/{id}";
-        }
-        return null;
-    }
+    private static string? ProfileUrl(Contact contact, Platform platform) => ContactProfiles.Url(contact, platform);
 }

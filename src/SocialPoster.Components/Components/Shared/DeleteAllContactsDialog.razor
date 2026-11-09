@@ -1,0 +1,47 @@
+@inject ContactService ContactSvc
+
+<MudDialog>
+    <DialogContent>
+        <MudAlert Severity="Severity.Error" Class="mb-3">
+            Delete ALL @count.ToString("N0") contacts, on every platform, not just the current filter.
+            This removes every contact with its accounts, template keys, merge aliases, cached account searches and saved conflict suggestions.
+            Post history is kept, but mentions of deleted contacts become unknown. This cannot be undone.
+        </MudAlert>
+        <MudText Class="mb-2">Use this to start clean, for example before re-importing follows. Nothing from the deleted contacts is kept for future imports to match against.</MudText>
+        <MudTextField T="string" @bind-Value="typed" Immediate="true" Label="Type DELETE to confirm" Variant="Variant.Outlined" Class="mb-2" />
+        <MudCheckBox T="bool" @bind-Value="confirmed" Label="I confirm deleting all contacts" />
+        @if (error is not null)
+        {
+            <MudAlert Severity="Severity.Error">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()" Disabled="@busy">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(!CanDelete || busy)" OnClick="DeleteAsync">Delete all contacts</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    private int count;
+    private string? typed;
+    private bool confirmed;
+    private bool busy;
+    private string? error;
+    private bool CanDelete => confirmed && string.Equals(typed?.Trim(), "DELETE", StringComparison.Ordinal);
+
+    protected override async Task OnInitializedAsync() => count = await ContactSvc.CountAllAsync();
+
+    private async Task DeleteAsync()
+    {
+        if (!CanDelete || busy) return;
+        busy = true;
+        try
+        {
+            var deleted = await ContactSvc.DeleteAllAsync();
+            Dialog.Close(DialogResult.Ok(deleted));
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

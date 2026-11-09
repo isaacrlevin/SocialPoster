@@ -60,6 +60,9 @@ public sealed partial class ContactService
             return await EnsureImportedAsync(incoming, platform, platforms, ct, expectedVersions: versions);
         if (candidates.Count == 0 && !hints.Ambiguous)
             return await EnsureImportedAsync(incoming, platform, platforms, ct, expectedVersions: versions);
+        // The auto-link rule is the same with or without review; only prompt when other candidates compete with it.
+        if (candidates.Count == 1 && FindAutoLink(contacts, incoming, platform, hints, selection)?.Contact.Id == candidates[0].Id)
+            return await EnsureImportedAsync(incoming, platform, platforms, ct, expectedVersions: versions);
 
         incoming.Id = -1;
         incoming.Key = "(incoming — not saved)";

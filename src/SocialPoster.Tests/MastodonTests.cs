@@ -465,7 +465,7 @@ public class MastodonTests
             ContactSource.XFollows, platforms: [Platform.X]);
         Assert.Null(other.Contact.MastodonAcct);
         await host.AddAsync(new() { Key = "duplicate", DisplayName = "Unrelated", MastodonAcct = "JANE@SOCIAL.EXAMPLE" });
-        Assert.Contains(await host.Contacts.FindConflictsAsync(), c => c.Reason == "Shared normalized platform identity");
+        Assert.Contains(await host.Contacts.FindConflictsAsync(), c => c.Reason.Contains("Same Mastodon handle"));
     }
 
     [Fact]

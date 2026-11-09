@@ -61,7 +61,7 @@ public class ThreadsTests
     {
         await using var host = await Host.CreateAsync();
         host.Http.Add("""{"error":{"message":"Bad token test-only-token","code":190}}""", HttpStatusCode.BadRequest);
-        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => host.Client.ConfigureAsync("test-only-token"));
+        var ex = await Assert.ThrowsAnyAsync<HttpRequestException>(() => host.Client.ConfigureAsync("test-only-token"));
         Assert.DoesNotContain("test-only-token", ex.Message);
         Assert.Contains("[redacted]", ex.Message);
         Assert.False(await host.Client.IsConfiguredAsync());
@@ -105,6 +105,57 @@ public class ThreadsTests
         await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
         Assert.Equal("media_type=TEXT&text=New+post+https%3A%2F%2Fisaacl.dev%2Faca&link_attachment=https%3A%2F%2Fisaacl.dev%2Faca",
             host.Http.Requests[0].Body);
+    }
+
+    private const string InvalidLinkAttachment = """{"error":{"message":"Fatal","type":"OAuthException","code":-1,"error_subcode":4279047,"is_transient":false,"error_user_title":"Invalid Link Attachment","error_user_msg":"The post you're trying to publish has an invalid link attachment."}}""";
+
+    [Fact]
+    public async Task Invalid_link_attachment_on_publish_reposts_without_the_card()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
+        host.Http.Add("""{"id":"container2"}""");
+        host.Http.Add("""{"id":"thread9"}""");
+        host.Http.Add("""{"id":"thread9","permalink":"https://www.threads.com/@jane/post/abc"}""");
+        var url = await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
+        Assert.Equal("https://www.threads.com/@jane/post/abc", url);
+        Assert.Equal(5, host.Http.Requests.Count);
+        Assert.Contains("link_attachment=", host.Http.Requests[0].Body);
+        Assert.Equal("media_type=TEXT&text=New+post+https%3A%2F%2Fisaacl.dev%2Faca", host.Http.Requests[2].Body);
+        Assert.Equal("creation_id=container2", host.Http.Requests[3].Body);
+    }
+
+    [Fact]
+    public async Task Invalid_link_attachment_on_create_also_falls_back_but_other_errors_do_not()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
+        host.Http.Add("""{"id":"container2"}""");
+        host.Http.Add("""{"id":"thread9"}""");
+        host.Http.Add("""{"permalink":"https://www.threads.com/@jane/post/abc"}""");
+        await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
+        Assert.DoesNotContain("link_attachment=", host.Http.Requests[1].Body);
+
+        host.Http.Requests.Clear();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"error":{"message":"Rate limited","code":4}}""", HttpStatusCode.BadRequest);
+        await Assert.ThrowsAsync<ThreadsApiException>(() => host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []));
+        Assert.Equal(2, host.Http.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Invalid_link_attachment_without_a_card_is_reported_with_the_user_message()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
+        var ex = await Assert.ThrowsAsync<ThreadsApiException>(() => host.Client.PostAsync(Post("No links"), []));
+        Assert.Equal(ThreadsClient.InvalidLinkAttachmentSubcode, ex.ErrorSubcode);
+        Assert.Contains("invalid link attachment", ex.Message);
     }
 
     [Fact]

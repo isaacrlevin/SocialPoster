@@ -3,21 +3,23 @@ using SocialPoster.Core.Services;
 
 namespace SocialPoster.Components;
 
-/// <summary>Persists completed conflict suggestions without retaining stale contact snapshots.</summary>
+/// <summary>Persists completed conflict suggestions without retaining stale contact snapshots or scores.</summary>
 public sealed class ConflictResultsStore(SecretStore secrets, ContactService contacts)
 {
     private const string Key = "ui.contactConflicts";
-    private sealed record SavedPair(int LeftId, int RightId, string Reason);
+    // Reason is kept for compatibility with scans saved before likelihood scores existed.
+    private sealed record SavedPair(int LeftId, int RightId, string? Reason = null);
 
     /// <summary>Saves completed suggestions, or clears the saved scan when dismissed.</summary>
     /// <param name="results">Suggestions to retain; null clears the saved scan.</param>
     /// <returns>A task representing the save.</returns>
     public Task SaveAsync(IReadOnlyList<ContactConflict>? results) =>
         secrets.SetAsync(Key, results is null ? null : JsonSerializer.Serialize(
-            results.Select(c => new SavedPair(c.Left.Id, c.Right.Id, c.Reason)).ToArray()));
+            results.Select(c => new SavedPair(c.Left.Id, c.Right.Id)).ToArray()));
 
-    /// <summary>Restores suggestions with current contacts, omitting deleted or merged-away rows. Does not scan.</summary>
-    /// <returns>The saved suggestions, or null if no scan was saved.</returns>
+    /// <summary>Restores suggestions with current contacts, re-scored from their current identities. Omits deleted or
+    /// merged-away rows and pairs with no remaining evidence. Does not scan.</summary>
+    /// <returns>The saved suggestions (highest likelihood first), or null if no scan was saved.</returns>
     public async Task<IReadOnlyList<ContactConflict>?> LoadAsync()
     {
         var json = await secrets.GetAsync(Key);
@@ -26,6 +28,9 @@ public sealed class ConflictResultsStore(SecretStore secrets, ContactService con
             ?? throw new InvalidOperationException("The saved conflict results are invalid.");
         var current = (await contacts.ListAsync()).ToDictionary(c => c.Id);
         return pairs.Where(p => p.LeftId != p.RightId && current.ContainsKey(p.LeftId) && current.ContainsKey(p.RightId))
-            .Select(p => new ContactConflict(current[p.LeftId], current[p.RightId], p.Reason)).ToList();
+            .Select(p => new ContactConflict(current[p.LeftId], current[p.RightId],
+                ContactService.ScoreDuplicate(current[p.LeftId], current[p.RightId])))
+            .Where(c => c.Likelihood.HasSignal)
+            .OrderByDescending(c => c.Score).ToList();
     }
 }

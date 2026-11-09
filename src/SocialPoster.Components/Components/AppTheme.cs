@@ -8,7 +8,7 @@ public static class AppTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#5b5bf0",
+            Primary = "#4f46e5",
             Secondary = "#0ea5e9",
             Tertiary = "#ec4899",
             // Page background is noticeably darker than the white card surface, and borders are

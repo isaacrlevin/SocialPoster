@@ -1,3 +1,5 @@
+<p align="center"><img src="img/logo.png" alt="SocialPoster logo" width="128" height="128"></p>
+
 # SocialPoster
 
 Write one post and publish it to **X**, **Bluesky**, **LinkedIn**, **Mastodon** and **Threads**, with mentions converted correctly
@@ -979,8 +981,8 @@ may differ slightly.)
 
 1. Go to the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps) and click **Create app**.
 2. Give it a name (for example "SocialPoster"), pick a **LinkedIn Page** to associate it with (create a free placeholder
-   page if you don't have one), upload any logo, accept the terms and click **Create app**. If LinkedIn asks you to
-   verify the app against the page, use the **Settings → Verify** link and have a page admin (you, usually) approve it.
+   page if you don't have one), upload a logo (`img/logo-square.png` works), accept the terms and click **Create app**.
+   If LinkedIn asks you to verify the app against the page, use the **Settings → Verify** link and have a page admin (you, usually) approve it.
 3. Open the **Products** tab and request access to both of these. They're self-serve and normally approved immediately:
     - **Share on LinkedIn** (grants `w_member_social`, needed to post)
     - **Sign In with LinkedIn using OpenID Connect** (grants `openid` and `profile`, used to find out who you are)
@@ -1043,9 +1045,14 @@ workload (see [Build it from source](#1-use-the-desktop-app-windows-and-macos));
 storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web and MAUI hosts, with
 relevant tests.
 
-The setup guide site lives in `docs/` (screenshots come from `img/`) and is deployed by `.github/workflows/pages.yml`.
+The setup guide site lives in `docs/` (screenshots and the logo come from `img/`) and is deployed by `.github/workflows/pages.yml`.
 To enable it on a fork, go to **Settings → Pages** and set **Source** to **GitHub Actions**. Preview locally by copying
 `img/` into a copy of `docs/` and opening `index.html`.
+
+The logo lives in `img/`: `logo.svg`/`logo.png` (rounded) and `logo-square.svg`/`logo-square.png` (full bleed, for
+places that apply their own mask). The desktop app icon and splash (`src/SocialPoster.MAUI/Resources`), the web favicon
+(`src/SocialPoster.Components/wwwroot/favicon.*`) and the sidebar logo in `NavMenu.razor` use the same artwork, so
+update them together.
 
 ### Releasing
 
@@ -1072,6 +1079,10 @@ app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialP
 ## License
 
 [MIT](LICENSE)
+
+## Privacy
+
+SocialPoster keeps your data on your computer and has no telemetry. See the [privacy policy](PRIVACY.md).
 
 ## Layout
 

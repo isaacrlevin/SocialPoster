@@ -21,9 +21,8 @@ h1:focus { outline: none; }
     var(--mud-palette-background); }
 .sp-brand { display: flex; align-items: center; gap: .65rem; padding: 1.1rem 1.25rem; }
 .sp-logo {
-    display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; color: #fff;
-    background: linear-gradient(135deg, var(--mud-palette-primary), var(--mud-palette-tertiary));
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--mud-palette-primary) 40%, transparent);
+    display: block; flex: none; width: 34px; height: 34px; border-radius: 22%;
+    box-shadow: 0 4px 14px color-mix(in srgb, #4F46E5 40%, transparent);
 }
 .sp-brand-name { letter-spacing: -.01em; }
 
@@ -91,6 +90,10 @@ h1:focus { outline: none; }
 .pbadge.on { background: color-mix(in srgb, var(--mud-palette-success) 16%, transparent); border-color: color-mix(in srgb, var(--mud-palette-success) 45%, transparent); }
 .pbadge.off { opacity: .35; }
 .pbadge.partial { background: color-mix(in srgb, var(--mud-palette-warning) 18%, transparent); border-color: color-mix(in srgb, var(--mud-palette-warning) 50%, transparent); }
+a.pbadge { color: inherit; text-decoration: none; cursor: pointer; transition: transform .1s ease, box-shadow .1s ease; }
+a.pbadge:hover { transform: translateY(-1px); box-shadow: 0 1px 3px color-mix(in srgb, var(--mud-palette-text-primary) 25%, transparent); }
+a.pbadge:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { a.pbadge { transition: none; } a.pbadge:hover { transform: none; } }
 
 .platform-icon {
     display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: .6rem;
@@ -130,3 +133,211 @@ code.key { padding: .1rem .4rem; border-radius: .4rem; background: var(--mud-pal
 .h-100 { height: 100%; }
 .mud-secondary-text { color: var(--mud-palette-text-secondary) !important; }
 .sp-card .mud-progress-linear.mud-progress-linear-small { height: 3px; }
+
+/* ---- Contact merge review dialog ---- */
+.merge-score {
+    padding: .75rem 1rem;
+    margin-bottom: .75rem;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: .75rem;
+}
+
+/* Evidence rows: a fixed-width points badge keeps descriptions aligned; no list bullets. */
+.merge-evidence {
+    list-style: none;
+    margin: .5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: .3rem;
+}
+
+.merge-evidence li {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    font-size: .875rem;
+}
+
+.merge-points {
+    flex: 0 0 2.6rem;
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: .8rem;
+    padding: .05rem 0;
+    border-radius: .4rem;
+}
+
+.merge-points.pos {
+    color: var(--mud-palette-success-darken);
+    background: color-mix(in srgb, var(--mud-palette-success) 14%, transparent);
+}
+
+.merge-points.neg {
+    color: var(--mud-palette-error-darken);
+    background: color-mix(in srgb, var(--mud-palette-error) 14%, transparent);
+}
+
+/* Contacts side by side on wide dialogs, stacked on narrow screens. */
+.merge-contacts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: .75rem;
+    margin-bottom: .5rem;
+}
+
+.merge-contact {
+    min-width: 0;
+    padding: .75rem;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: .75rem;
+}
+
+.merge-contact.survivor {
+    border-color: var(--mud-palette-primary);
+    box-shadow: 0 0 0 1px var(--mud-palette-primary);
+}
+
+.merge-name {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.merge-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.merge-ellipsis {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Bio clamps to two lines; the full text is in the tooltip and the details section. */
+.merge-bio {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: .35rem;
+    font-size: .875rem;
+    line-height: 1.4;
+    color: var(--mud-palette-text-secondary);
+}
+
+.merge-accounts {
+    list-style: none;
+    margin: .5rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: .15rem;
+}
+
+.merge-accounts li {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    min-height: 1.9rem;
+    font-size: .875rem;
+}
+
+.merge-platform {
+    flex: 0 0 1.4rem;
+    text-align: center;
+    font-weight: 700;
+}
+
+.merge-details {
+    min-width: 0;
+    padding: .5rem .75rem;
+    border-radius: .5rem;
+    background: var(--mud-palette-background-gray);
+    overflow-wrap: anywhere;
+}
+
+/* ---- Suggested duplicates dialog ---- */
+.conflict-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem 1.25rem;
+    margin-bottom: .5rem;
+}
+
+.conflict-filters .conflict-slider {
+    flex: 1 1 14rem;
+    max-width: 22rem;
+}
+
+.conflict-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: .75rem;
+    overflow: hidden;
+}
+
+/* Score | names + reason | action — the middle column truncates instead of wrapping the row. */
+.conflict-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+    padding: .6rem .75rem;
+}
+
+.conflict-row + .conflict-row {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+.conflict-text {
+    min-width: 0;
+}
+
+.conflict-names {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .15rem .5rem;
+    font-weight: 600;
+    font-size: .9rem;
+}
+
+.conflict-names code {
+    font-weight: 400;
+    font-size: .78rem;
+}
+
+.conflict-sep {
+    color: var(--mud-palette-text-secondary);
+    font-weight: 400;
+}
+
+.conflict-reason {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .8rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+@media (max-width: 600px) {
+    .conflict-row {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .conflict-row .mud-button-root {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+}
+
+/* ---- Menu items with a secondary hint line ---- */
+.sp-menu-hint { font-size: .75rem; line-height: 1.3; color: var(--mud-palette-text-secondary); white-space: normal; max-width: 22rem; }
+.sp-menu-section { padding: .35rem 1rem .15rem; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mud-palette-error); }
+.sp-menu-danger { color: var(--mud-palette-error); }

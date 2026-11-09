@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SocialPoster.Core.Data;
 
 namespace SocialPoster.Core.Services;
@@ -7,7 +8,8 @@ internal sealed class ContactImportConflictException(string message) : InvalidOp
 
 public sealed partial class ContactService
 {
-    // No name-based inference: only stable IDs, exact handles, and explicit profile evidence.
+    // Stable IDs, exact handles and explicit profile evidence link imports. The only inference is FindAutoLink:
+    // an identical name plus the same long username on another platform, with no conflicting account or link.
     private async Task<EnsureResult> EnsureImportedAsync(Contact incoming, Platform platform,
         IReadOnlyCollection<Platform>? platforms, CancellationToken ct, ContactImportReviewer? reviewer = null,
         IReadOnlyDictionary<int, string>? expectedVersions = null)
@@ -37,6 +39,13 @@ public sealed partial class ContactService
         {
             matches = contacts.Where(c => MatchesHints(c, hints) ||
                 MatchesHints(incoming, ImportHints(c.Bio, selection))).ToList();
+        }
+        var autoLink = matches.Count == 0 ? FindAutoLink(contacts, incoming, platform, hints, selection) : null;
+        if (autoLink is not null)
+        {
+            matches = [autoLink.Contact];
+            notes.Add($"Auto-linked to saved contact \"{autoLink.Contact.Key}\": identical name and the same username " +
+                $"\"{autoLink.Username}\" already saved on {autoLink.SavedPlatform}.");
         }
         if (matches.Count > 1)
             throw new ContactImportConflictException($"Cannot safely link {incoming.DisplayName}: multiple saved contacts match its identity or profile links.");
@@ -96,7 +105,10 @@ public sealed partial class ContactService
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(target, existing is null, notes, review);
+        if (autoLink is not null)
+            logger.LogInformation("Import auto-linked {Platform} {Handle} to contact {Key} (username {Username} on {SavedPlatform})",
+                platform, PrimaryHandle(incoming, platform), target.Key, autoLink.Username, autoLink.SavedPlatform);
+        return new(target, existing is null, notes, review, AutoLinked: autoLink is not null);
 
         void LinkHint(Platform hintPlatform, string? value, string? current, Func<Contact, bool> owned, Action<string> apply)
         {

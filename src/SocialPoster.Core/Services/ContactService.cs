@@ -16,19 +16,26 @@ public enum CandidateKind
 
 public sealed record MentionCandidate(CandidateKind Kind, string Title, string Subtitle, string? AvatarUrl, Contact? Contact = null, BskyActor? Actor = null, string? XUsername = null, MastodonAccount? MastodonAccount = null);
 
-public sealed record EnsureResult(Contact Contact, bool Created, IReadOnlyList<string> Notes, bool NeedsReview = false);
+/// <param name="AutoLinked">Linked by the identical-name, same-username rule rather than hard identity evidence.</param>
+public sealed record EnsureResult(Contact Contact, bool Created, IReadOnlyList<string> Notes, bool NeedsReview = false, bool AutoLinked = false);
 
 /// <summary>Counts for a completed import. Skipped identities and conflicting hints need manual review.</summary>
 /// <param name="Added">Newly saved contacts.</param>
-/// <param name="Updated">Imports linked to saved contacts.</param>
+/// <param name="Updated">Imports linked to saved contacts, including auto-linked ones.</param>
 /// <param name="Skipped">Ambiguous or conflicting primary identities not imported.</param>
 /// <param name="NeedsReview">Imports whose bio hints could not safely be applied.</param>
 /// <param name="Notes">Up to five review notes identifying affected accounts.</param>
-public sealed record FollowImportResult(int Added, int Updated, int Skipped, int NeedsReview, IReadOnlyList<string>? Notes = null)
+/// <param name="AutoLinked">Updates linked by identical name and the same username on another platform.</param>
+/// <param name="AutoLinkedNames">Up to five auto-linked contacts, for spot-checking.</param>
+public sealed record FollowImportResult(int Added, int Updated, int Skipped, int NeedsReview, IReadOnlyList<string>? Notes = null,
+    int AutoLinked = 0, IReadOnlyList<string>? AutoLinkedNames = null)
 {
     /// <summary>Formats counts and review notes for standard import feedback.</summary>
     /// <returns>A human-readable import summary.</returns>
-    public override string ToString() => $"{Added} added, {Updated} updated, {Skipped} skipped (ambiguous/conflicting identities), {NeedsReview} with conflicting bio links." +
+    public override string ToString() => $"{Added} added, {Updated} updated" +
+        (AutoLinked > 0 ? $" ({AutoLinked} auto-linked by matching name and username)" : "") +
+        $", {Skipped} skipped (ambiguous/conflicting identities), {NeedsReview} with conflicting bio links." +
+        (AutoLinked > 0 ? $" Auto-linked: {string.Join(", ", AutoLinkedNames ?? [])}{(AutoLinked > (AutoLinkedNames?.Count ?? 0) ? ", …" : "")}." : "") +
         (Skipped + NeedsReview > 0 ? " Review manually in Contacts. " + string.Join(" ", Notes ?? []) : "");
 }
 
@@ -295,8 +302,9 @@ public sealed partial class ContactService(IDbContextFactory<AppDbContext> dbFac
     private static async Task<FollowImportResult> SyncFollowsAsync<T>(IAsyncEnumerable<IReadOnlyList<T>> pages,
         Func<T, Task<EnsureResult>> ensure, IProgress<int>? progress, CancellationToken ct)
     {
-        int added = 0, updated = 0, skipped = 0, review = 0, seen = 0;
+        int added = 0, updated = 0, skipped = 0, review = 0, autoLinked = 0, seen = 0;
         var notes = new List<string>();
+        var autoLinkedNames = new List<string>();
         await foreach (var page in pages.WithCancellation(ct))
         {
             foreach (var follow in page)
@@ -306,6 +314,7 @@ public sealed partial class ContactService(IDbContextFactory<AppDbContext> dbFac
                 {
                     var result = await ensure(follow);
                     if (result.Created) added++; else updated++;
+                    if (result.AutoLinked && ++autoLinked <= 5) autoLinkedNames.Add(result.Contact.DisplayName);
                     if (result.NeedsReview)
                     {
                         review++;
@@ -321,7 +330,7 @@ public sealed partial class ContactService(IDbContextFactory<AppDbContext> dbFac
             }
         }
 
-        return new(added, updated, skipped, review, notes);
+        return new(added, updated, skipped, review, notes, autoLinked, autoLinkedNames);
     }
 
     public async Task<Dictionary<string, Contact>> GetByKeysAsync(IEnumerable<string> keys, CancellationToken ct = default)

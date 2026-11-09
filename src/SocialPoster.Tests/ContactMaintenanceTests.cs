@@ -19,7 +19,7 @@ public class ContactMaintenanceTests
     {
         await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
         var a = new Contact { Key = "a", DisplayName = "First", XUsername = "first" };
-        var b = new Contact { Key = "b", DisplayName = "Second", XUsername = "second" };
+        var b = new Contact { Key = "b", DisplayName = "Second", XUsername = "@FIRST" };
         var c = new Contact { Key = "c", DisplayName = "Third", XUsername = "third" };
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
@@ -30,7 +30,7 @@ public class ContactMaintenanceTests
         {
             var store = scope.ServiceProvider.GetRequiredService<ConflictResultsStore>();
             Assert.Null(await store.LoadAsync());
-            await store.SaveAsync([new(a, b, "Saved evidence"), new(a, c, "Deleted pair")]);
+            await store.SaveAsync([Pair(a, b), Pair(a, c)]);
         }
         await using (var db = await host.Factory.CreateDbContextAsync())
         {
@@ -43,12 +43,15 @@ public class ContactMaintenanceTests
             var store = scope.ServiceProvider.GetRequiredService<ConflictResultsStore>();
             var pair = Assert.Single((await store.LoadAsync())!);
             Assert.Equal("Current name", pair.Left.DisplayName);
-            Assert.Equal("Saved evidence", pair.Reason);
+            Assert.Contains("Same X handle", pair.Reason);
+            Assert.Equal(90, pair.Score); // rescored from current data, not the saved snapshot
         }
         var html = await host.RenderAsync<Contacts>(null);
-        Assert.Contains("Suggested conflicts", html);
-        Assert.Contains("Saved evidence", html);
-        Assert.DoesNotContain("Deleted pair", html);
+        // The page shows only a compact banner; the pair list lives in the suggestions dialog.
+        Assert.Contains("1 possible duplicate", html);
+        Assert.Contains("1 very likely", html);
+        Assert.Contains("Review duplicates", html);
+        Assert.DoesNotContain("Same X handle", html);
         Assert.DoesNotContain("Checking contacts for conflicts", html);
         using (var scope = host.Provider.CreateScope())
         {
@@ -58,7 +61,7 @@ public class ContactMaintenanceTests
             await store.SaveAsync(null);
             Assert.Null(await store.LoadAsync());
         }
-        Assert.DoesNotContain("Suggested conflicts", await host.RenderAsync<Contacts>(null));
+        Assert.DoesNotContain("possible duplicate", await host.RenderAsync<Contacts>(null));
     }
 
     [Theory]
@@ -135,7 +138,7 @@ public class ContactMaintenanceTests
         Assert.Contains(3, selected.Keys);
         SetField(page, "conflicts", new List<ContactConflict>
         {
-            new(a, b, "shared"), new(b, c, "shared"), new(c, d, "unrelated")
+            Pair(a, b), Pair(b, c), Pair(c, d)
         });
         typeof(Contacts).GetMethod("RemoveMergedSelections", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(page, [1, 2]);
@@ -190,16 +193,21 @@ public class ContactMaintenanceTests
         var service = host.Provider.GetRequiredService<ContactService>();
         var progress = new ConflictProgress();
         var suggestions = await service.FindConflictsAsync(progress: progress);
-        var total = (long)count * (count - 1) / 2;
+        long total = count;
         Assert.Equal((0L, total), progress.Values[0]);
         Assert.Equal((total, total), progress.Values[^1]);
-        Assert.Equal(total, suggestions.Count);
+        Assert.Equal((long)count * (count - 1) / 2, suggestions.Count);
         Assert.All(progress.Values, value => Assert.InRange(value.Completed, 0, value.Total));
         Assert.True(progress.Values.Zip(progress.Values.Skip(1)).All(pair => pair.First.Completed <= pair.Second.Completed));
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.FindConflictsAsync(cancellation.Token, progress));
     }
+
+    private static bool IsPair(ContactConflict s, string x, string y) =>
+        s.Left.Key == x && s.Right.Key == y || s.Left.Key == y && s.Right.Key == x;
+
+    private static ContactConflict Pair(Contact a, Contact b) => new(a, b, ContactService.ScoreDuplicate(a, b));
 
     private sealed class ConflictProgress : IProgress<(long Completed, long Total)>
     {
@@ -439,9 +447,11 @@ public class ContactMaintenanceTests
         }
         var service = host.Provider.GetRequiredService<ContactService>();
         var suggestions = await service.FindConflictsAsync();
-        Assert.Contains(suggestions, s => s.Reason.Contains("normalized platform"));
-        Assert.Contains(suggestions, s => s.Reason.Contains("profile link"));
-        Assert.Contains(suggestions, s => s.Reason.Contains("names"));
+        Assert.Contains(suggestions, s => IsPair(s, "a", "b") && s.Reason.Contains("Same X handle"));
+        Assert.Contains(suggestions, s => IsPair(s, "c", "d") && s.Reason.Contains("links to"));
+        Assert.Contains(suggestions, s => IsPair(s, "e", "f") && s.Reason.Contains("Identical normalized names"));
+        Assert.Contains(suggestions, s => IsPair(s, "e", "g") && s.Reason.Contains("one character"));
+        Assert.True(suggestions.Zip(suggestions.Skip(1)).All(p => p.First.Score >= p.Second.Score));
         Assert.DoesNotContain(suggestions, s => s.Left.Key == "h" || s.Right.Key == "h");
         Assert.Equal(8, (await service.ListAsync()).Count);
         Assert.Equal(0, host.Http.RequestCount);
@@ -453,10 +463,13 @@ public class ContactMaintenanceTests
     {
         await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
         var html = await host.RenderAsync<Contacts>(platforms);
-        Assert.Equal(platforms.Contains(Platform.X), html.Contains("Purge X"));
-        Assert.Equal(platforms.Contains(Platform.Bluesky), html.Contains("Purge Bluesky"));
-        Assert.Equal(platforms.Contains(Platform.LinkedIn), html.Contains("Purge LinkedIn"));
+        // Purge actions live in the closed overflow menu, so check what it would offer.
+        var purge = await host.InspectAsync<Contacts, IReadOnlyList<Platform>>(platforms,
+            page => PlatformSelectionTests.ContactsPlatforms(page, "PurgePlatforms"));
+        Assert.Equal(platforms.OrderBy(p => p), purge.OrderBy(p => p));
         Assert.Contains("Handle conflicts", html);
+        Assert.Contains("More contact actions", html);
+        Assert.DoesNotContain("Purge X", html); // destructive actions stay out of the toolbar
     }
 
     [Theory]

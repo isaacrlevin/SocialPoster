@@ -1,0 +1,14 @@
+@* Shows a duplicate likelihood score with its band as text, so meaning never depends on color alone. *@
+<MudChip T="string" Size="@Size" Variant="Variant.Outlined" Color="@ChipColor" Class="ma-0"
+         aria-label="@($"Duplicate likelihood {Score} out of 100, {DuplicateLikelihood.BandFor(Score).ToLowerInvariant()}")">
+    <strong>@Score</strong>&nbsp;· @DuplicateLikelihood.BandFor(Score)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public int Score { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Small;
+
+    private Color ChipColor => Score >= DuplicateLikelihood.VeryLikely ? Color.Error
+        : Score >= DuplicateLikelihood.Likely ? Color.Warning
+        : Score >= DuplicateLikelihood.Possible ? Color.Info : Color.Default;
+}

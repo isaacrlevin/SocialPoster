@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · SocialPoster</title>
+  <meta name="description" content="How SocialPoster handles your data: everything stays on your computer, with no telemetry, analytics or developer servers.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg">
+  <link rel="apple-touch-icon" href="img/logo-square.png">
+</head>
+<body>
+<!-- Published copy of PRIVACY.md (linked from the Microsoft Store listing). Keep the two in sync. -->
+
+<header class="hero">
+  <a href="./"><img class="logo" src="img/logo.svg" alt="SocialPoster home" width="72" height="72"></a>
+  <h1>Privacy Policy</h1>
+  <p class="lead">Effective date: November 6, 2026</p>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Table of contents">
+    <strong>On this page</strong>
+    <a href="#summary">The short version</a>
+    <a href="#stored">Stored on your computer</a>
+    <a href="#sent">Sent to other services</a>
+    <a href="#store">Microsoft Store</a>
+    <a href="#choices">Your choices</a>
+    <a href="#security">Security</a>
+    <a href="#children">Children</a>
+    <a href="#changes">Changes</a>
+    <a href="#contact">Contact</a>
+  </nav>
+
+  <main>
+    <p>SocialPoster is an open-source app that publishes posts to X, Bluesky, LinkedIn, Mastodon and Threads. This policy covers the SocialPoster desktop app (from the Microsoft Store or GitHub releases) and the SocialPoster Web project when you run it yourself.</p>
+
+    <section id="summary">
+      <h2>The short version</h2>
+      <ul>
+        <li>SocialPoster runs on your computer. <strong>The developer doesn't run any servers for it and receives none of your data.</strong></li>
+        <li>There is <strong>no telemetry, analytics, advertising or tracking</strong> in the app.</li>
+        <li>Your accounts, contacts, posts and settings are stored <strong>only on your computer</strong>, and credentials are encrypted.</li>
+        <li>Data leaves your computer only when you use a feature that needs it, and only goes to the service that feature uses (for example, a post goes to the platforms you publish it to).</li>
+      </ul>
+    </section>
+
+    <section id="stored">
+      <h2>Information stored on your computer</h2>
+      <p>SocialPoster keeps its data in a local folder: <code>%LOCALAPPDATA%\SocialPoster</code> on Windows, <code>~/Library/Application Support/SocialPoster</code> on macOS, or <code>~/.local/share/SocialPoster</code> on Linux. It contains:</p>
+      <ul>
+        <li><strong>Credentials and settings</strong> that you enter, such as platform access tokens, app passwords, API keys for AI and web search providers, and a GitHub token. These are encrypted with ASP.NET Core Data Protection. On Windows the encryption keys are also protected with Windows DPAPI, tied to your Windows account.</li>
+        <li><strong>Contacts</strong>: the people you mention or import, with their display name, profile picture URL, bio, and their usernames, handles and IDs on each platform.</li>
+        <li><strong>Post history and scheduled posts</strong>: the text of posts you publish or schedule, per-platform results, and copies of media attached to scheduled posts.</li>
+        <li><strong>Account finder results</strong>: the searches the AI account finder ran and the accounts it suggested.</li>
+      </ul>
+      <p>The app also writes a startup error log to <code>~/.socialposter</code> (Windows) or <code>~/Library/Logs/SocialPoster</code> (macOS) if it fails to start, and saves exports to your Downloads folder when you ask it to. These files stay on your computer and are never uploaded.</p>
+    </section>
+
+    <section id="sent">
+      <h2>Information sent to other services</h2>
+      <p>SocialPoster talks directly from your computer to the services below, and only when you use the related feature. Each service handles the data under its own privacy policy.</p>
+      <ul>
+        <li><strong>Social platforms you connect</strong> (X, Bluesky, LinkedIn, Mastodon instances you choose, Threads): the posts and media you publish, the credentials needed to sign in, searches when you look someone up, and requests to import the accounts you follow.</li>
+        <li><strong>Link previews</strong>: when a post contains a link, SocialPoster asks Bluesky's link card service (<code>cardyb.bsky.app</code>) for the page's title, description and image, or reads them from the linked page itself.</li>
+        <li><strong>AI features (optional, off until you set them up)</strong>: the account finder and "Draft from a link" send the relevant text, such as a contact's name and known accounts, or a link and its page content, to the AI provider you choose. That is GitHub Copilot (using your GitHub sign-in) or a provider you add, such as OpenAI, Microsoft Foundry, OpenRouter, Groq, or a model running locally through Ollama or LM Studio. If automatic search is on, a search runs when you mention a contact who has no X or LinkedIn account yet.</li>
+        <li><strong>Web search (optional)</strong>: if you configure Brave Search, Tavily or a SearXNG instance, the AI agent sends search queries to it and may open the public web pages it finds.</li>
+        <li><strong>Your web browser</strong>: links you open, and X posts in browser mode, open in your default browser.</li>
+      </ul>
+      <p>SocialPoster doesn't sell, rent or share your information with anyone else, and doesn't use it for advertising.</p>
+    </section>
+
+    <section id="store">
+      <h2>Microsoft Store</h2>
+      <p>If you install SocialPoster from the Microsoft Store, Microsoft handles the download, installation and updates under the <a href="https://privacy.microsoft.com/privacystatement">Microsoft Privacy Statement</a>. Microsoft may give the developer aggregated, non-identifying reports through Partner Center, such as install counts and crash reports collected by Windows. The app itself sends nothing to the developer.</p>
+    </section>
+
+    <section id="choices">
+      <h2>Your choices and deleting your data</h2>
+      <ul>
+        <li>Remove a credential with <strong>Forget token</strong> (or by clearing it) on the Accounts page. This deletes the local copy only. To revoke access fully, also revoke the token or app password on the platform itself.</li>
+        <li>Delete contacts individually, by platform (<strong>Purge</strong>), or all at once on the Contacts page.</li>
+        <li>Turn off the AI account finder, or just its automatic search, under <strong>Accounts → Account finder agent</strong>.</li>
+        <li>To delete everything, close the app and delete the data folder listed above. <strong>Uninstalling the app doesn't delete this folder</strong>, so your data is kept if you reinstall or also use the Web project.</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>Security</h2>
+      <p>Credentials are encrypted at rest, and Mastodon and Threads tokens are sent only to their own servers. The Web project has no login, so run it only on <code>localhost</code>. Anyone with access to your user account on your computer can read the data folder, so protect it as you would any other private files.</p>
+    </section>
+
+    <section id="children">
+      <h2>Children</h2>
+      <p>SocialPoster isn't directed at children under 13, and the developer doesn't knowingly collect information from them.</p>
+    </section>
+
+    <section id="changes">
+      <h2>Changes to this policy</h2>
+      <p>If this policy changes, the updated version will be published at the same address with a new effective date. Changes are also visible in the project's <a href="https://github.com/isaacrlevin/SocialPoster/commits/main/PRIVACY.md">Git history</a>.</p>
+    </section>
+
+    <section id="contact">
+      <h2>Contact</h2>
+      <p>Questions about this policy can be asked by opening an issue at <a href="https://github.com/isaacrlevin/SocialPoster/issues">github.com/isaacrlevin/SocialPoster/issues</a>.</p>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <p><a href="./">SocialPoster</a> is open source under the <a href="https://github.com/isaacrlevin/SocialPoster/blob/main/LICENSE">MIT license</a>.</p>
+</footer>
+
+</body>
+</html>

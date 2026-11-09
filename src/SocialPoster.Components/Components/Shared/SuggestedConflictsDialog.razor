@@ -1,0 +1,126 @@
+@* Suggested duplicate pairs from the last scan, filterable by likelihood. Review is delegated to the page,
+   which opens the merge dialog on top of this one and returns the updated list. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            From your last scan, saved so you can leave and return. Each pair is scored 1–99; a score is not proof that
+            two contacts are the same person. Nothing is merged automatically.
+        </MudText>
+        <div class="conflict-filters">
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" aria-label="Likelihood presets">
+                @foreach (var (label, min) in Presets)
+                {
+                    <MudButton OnClick="() => SetMin(min)" Color="@(minLikelihood == min ? Color.Primary : Color.Default)"
+                               Variant="@(minLikelihood == min ? Variant.Filled : Variant.Outlined)"
+                               aria-pressed="@(minLikelihood == min ? "true" : "false")">@label (@CountAtLeast(min).ToString("N0"))</MudButton>
+                }
+            </MudButtonGroup>
+            <MudSlider T="int" Value="@minLikelihood" ValueChanged="SetMin" Min="0" Max="99" Step="1" ValueLabel="true"
+                       Size="Size.Small" Class="conflict-slider" aria-label="Minimum likelihood score">
+                Minimum likelihood: @minLikelihood
+            </MudSlider>
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2" role="status">
+            Showing @Math.Min(limit, filtered.Count).ToString("N0") of @filtered.Count.ToString("N0") at @minLikelihood or above
+            (@items.Count.ToString("N0") total)
+        </MudText>
+
+        <ul class="conflict-list" aria-label="Suggested duplicates">
+            @foreach (var conflict in filtered.Take(limit))
+            {
+                <li class="conflict-row">
+                    <LikelihoodChip Score="@conflict.Score" />
+                    <div class="conflict-text">
+                        <div class="conflict-names">
+                            <span>@conflict.Left.DisplayName <code class="key">@conflict.Left.Key</code></span>
+                            <span class="conflict-sep" aria-label="and">↔</span>
+                            <span>@conflict.Right.DisplayName <code class="key">@conflict.Right.Key</code></span>
+                        </div>
+                        <div class="conflict-reason" title="@conflict.Reason">@conflict.Reason</div>
+                    </div>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => ReviewAsync(conflict)" Disabled="@(busy || Disabled)"
+                               aria-label="@($"Review merge of {conflict.Left.DisplayName} and {conflict.Right.DisplayName}")">Review merge</MudButton>
+                </li>
+            }
+        </ul>
+        @if (filtered.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="my-2">No suggestions at or above @minLikelihood. Lower the minimum likelihood to see more.</MudText>
+        }
+        @if (filtered.Count > limit)
+        {
+            <MudButton Size="Size.Small" OnClick="() => limit += PageSize">Show @Math.Min(PageSize, filtered.Count - limit) more</MudButton>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" OnClick="Dismiss" Disabled="@busy">Dismiss all suggestions</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Dialog.Close(DialogResult.Ok(minLikelihood))" Disabled="@busy">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>Returned as dialog data when the user dismisses every suggestion.</summary>
+    public const string DismissResult = "dismiss";
+    private const int PageSize = 50;
+    private static readonly (string Label, int Min)[] Presets =
+    [
+        ("All", 0), ($"{DuplicateLikelihood.Possible}+", DuplicateLikelihood.Possible),
+        ($"{DuplicateLikelihood.Likely}+", DuplicateLikelihood.Likely),
+        ($"{DuplicateLikelihood.VeryLikely}+", DuplicateLikelihood.VeryLikely)
+    ];
+
+    [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<ContactConflict> Conflicts { get; set; } = [];
+    /// <summary>Opens the merge review for a pair and returns the suggestions that remain afterwards.</summary>
+    [Parameter, EditorRequired] public Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>> Review { get; set; } = default!;
+    [Parameter] public int MinLikelihood { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private IReadOnlyList<ContactConflict> items = [];
+    private IReadOnlyList<ContactConflict> filtered = [];
+    private int minLikelihood;
+    private int limit = PageSize;
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        minLikelihood = Math.Clamp(MinLikelihood, 0, 99);
+        SetItems(Conflicts);
+    }
+
+    private void SetItems(IReadOnlyList<ContactConflict> value)
+    {
+        items = value.OrderByDescending(c => c.Score).ToList();
+        Refilter();
+    }
+
+    private void Refilter() => filtered = items.Where(c => c.Score >= minLikelihood).ToList();
+    private int CountAtLeast(int min) => items.Count(c => c.Score >= min);
+
+    private void SetMin(int value)
+    {
+        minLikelihood = Math.Clamp(value, 0, 99);
+        limit = PageSize;
+        Refilter();
+    }
+
+    private async Task ReviewAsync(ContactConflict conflict)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var remaining = await Review(conflict);
+            if (remaining is null || remaining.Count == 0)
+            {
+                Dialog.Close(DialogResult.Ok(minLikelihood));
+                return;
+            }
+            SetItems(remaining);
+        }
+        finally { busy = false; }
+    }
+
+    private void Dismiss() => Dialog.Close(DialogResult.Ok(DismissResult));
+}

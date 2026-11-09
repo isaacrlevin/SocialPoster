@@ -1,13 +1,19 @@
 using System.Data;
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SocialPoster.Core.Data;
 
 namespace SocialPoster.Core.Services;
 
-/// <summary>A suggested pair, with evidence for user review (never an automatic merge).</summary>
-public sealed record ContactConflict(Contact Left, Contact Right, string Reason);
+/// <summary>A suggested pair, with a likelihood score and evidence for user review (never an automatic merge).</summary>
+public sealed record ContactConflict(Contact Left, Contact Right, DuplicateLikelihood Likelihood)
+{
+    /// <summary>The 1–99 likelihood that the pair is the same person.</summary>
+    public int Score => Likelihood.Score;
+
+    /// <summary>The positive evidence, strongest first.</summary>
+    public string Reason => Likelihood.Summary;
+}
 
 /// <summary>A merge snapshot. Platform collisions require an explicit choice of one contact's whole identity.</summary>
 public sealed record ContactMergePreview(Contact Left, Contact Right, IReadOnlyList<Platform> Collisions,
@@ -23,15 +29,70 @@ public sealed partial class ContactService
         return await PurgeTargets(db, platform).CountAsync(ct);
     }
 
+    /// <summary>Counts contacts imported from <paramref name="platform"/> that a plain purge keeps because they still
+    /// have other linked accounts — usually links inferred from the bio that platform supplied.</summary>
+    public async Task<int> CountImportedSurvivorsAsync(Platform platform, CancellationToken ct = default)
+    {
+        ValidatePurge(platform);
+        var sources = SourcesFor(platform);
+        if (sources.Length == 0) return 0;
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var imported = await db.Contacts.AsNoTracking().Where(c => sources.Contains(c.Source)).ToListAsync(ct);
+        return imported.Count(c => { ClearIdentity(c, platform); return HasAnyAccount(c); });
+    }
+
+    /// <summary>Counts every saved contact.</summary>
+    public async Task<int> CountAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Contacts.CountAsync(ct);
+    }
+
+    /// <summary>Deletes every contact with its merge aliases and contact-bound search caches. Post history is kept;
+    /// mentions of deleted contacts become unknown.</summary>
+    /// <returns>The number of contacts deleted.</returns>
+    public async Task<int> DeleteAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await db.ContactKeyAliases.ExecuteDeleteAsync(ct);
+        // Every search cache is contact-bound (key contact:{id}); none are useful without contacts.
+        await db.AccountSearches.ExecuteDeleteAsync(ct);
+        var count = await db.Contacts.ExecuteDeleteAsync(ct);
+        await transaction.CommitAsync(ct);
+        return count;
+    }
+
     /// <summary>Removes every target identity and cached candidates, deleting contacts with no remaining accounts.</summary>
     /// <returns>The number of contacts with removed identity/verification data.</returns>
-    public async Task<int> PurgePlatformAsync(Platform platform, CancellationToken ct = default)
+    public Task<int> PurgePlatformAsync(Platform platform, CancellationToken ct = default) =>
+        PurgePlatformAsync(platform, deleteImportedContacts: false, ct);
+
+    /// <summary>Removes every target identity and cached candidates, deleting contacts with no remaining accounts.</summary>
+    /// <param name="platform">The platform to purge.</param>
+    /// <param name="deleteImportedContacts">Also delete contacts imported from this platform even if they still have
+    /// other linked accounts, so no name, bio or bio-derived link from that platform is left behind.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The number of contacts with removed identity/verification data or deleted as imported.</returns>
+    public async Task<int> PurgePlatformAsync(Platform platform, bool deleteImportedContacts, CancellationToken ct = default)
     {
         ValidatePurge(platform);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var count = await PurgeTargets(db, platform).CountAsync(ct);
-        if (platform == Platform.X)
+        var affected = (await PurgeTargets(db, platform).Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+        var sources = SourcesFor(platform);
+        if (deleteImportedContacts && sources.Length > 0)
+        {
+            var importedIds = await db.Contacts.Where(c => sources.Contains(c.Source)).Select(c => c.Id).ToListAsync(ct);
+            affected.UnionWith(importedIds);
+            await db.AccountSearches.Where(s => s.ContactId != null && importedIds.Contains(s.ContactId.Value)).ExecuteDeleteAsync(ct);
+            await db.Contacts.Where(c => importedIds.Contains(c.Id)).ExecuteDeleteAsync(ct);
+        }
+        var count = affected.Count;
+        if (platform == Platform.Threads)
+            await db.Contacts.ExecuteUpdateAsync(s => s.SetProperty(c => c.ThreadsUsername, (string?)null)
+                .SetProperty(c => c.DiscoveryRevision, c => c.DiscoveryRevision + 1), ct);
+        else if (platform == Platform.X)
             await db.Contacts.ExecuteUpdateAsync(s => s.SetProperty(c => c.XUsername, (string?)null)
                 .SetProperty(c => c.XUserId, (string?)null).SetProperty(c => c.XVerifiedByCopilotAtUtc, (DateTime?)null)
                 .SetProperty(c => c.DiscoveryRevision, c => c.DiscoveryRevision + 1), ct);
@@ -43,7 +104,7 @@ public sealed partial class ContactService
             await db.Contacts.ExecuteUpdateAsync(s => s.SetProperty(c => c.MastodonAcct, (string?)null)
                 .SetProperty(c => c.MastodonUri, (string?)null).SetProperty(c => c.MastodonProfileUrl, (string?)null)
                 .SetProperty(c => c.DiscoveryRevision, c => c.DiscoveryRevision + 1), ct);
-        else
+        else if (platform == Platform.LinkedIn)
             await db.Contacts.ExecuteUpdateAsync(s => s.SetProperty(c => c.LinkedInProfileUrl, (string?)null)
                 .SetProperty(c => c.LinkedInUrn, (string?)null).SetProperty(c => c.LinkedInName, (string?)null)
                 .SetProperty(c => c.LinkedInVerifiedByCopilotAtUtc, (DateTime?)null)
@@ -72,56 +133,34 @@ public sealed partial class ContactService
         (c.MastodonProfileUrl == null || c.MastodonProfileUrl.Trim() == "") &&
         (c.LinkedInProfileUrl == null || c.LinkedInProfileUrl.Trim() == "") &&
         (c.LinkedInUrn == null || c.LinkedInUrn.Trim() == "") &&
-        (c.LinkedInName == null || c.LinkedInName.Trim() == ""));
+        (c.LinkedInName == null || c.LinkedInName.Trim() == "") &&
+        (c.ThreadsUsername == null || c.ThreadsUsername.Trim() == ""));
 
     private static bool HasAnyAccount(Contact contact) =>
         new[] { contact.XUsername, contact.XUserId, contact.BlueskyHandle, contact.BlueskyDid,
             contact.LinkedInProfileUrl, contact.LinkedInUrn, contact.LinkedInName,
-            contact.MastodonAcct, contact.MastodonUri, contact.MastodonProfileUrl }
+            contact.MastodonAcct, contact.MastodonUri, contact.MastodonProfileUrl, contact.ThreadsUsername }
         .Any(value => !string.IsNullOrWhiteSpace(value));
 
-    /// <summary>Finds review-only suggestions using normalized identities, explicit profile evidence, or similar names.</summary>
-    /// <param name="ct">Cancellation token.</param>
-    /// <param name="progress">Receives the number of completed and total contact-pair comparisons.</param>
-    /// <returns>Suggested pairs for manual review.</returns>
-    public async Task<IReadOnlyList<ContactConflict>> FindConflictsAsync(CancellationToken ct = default,
-        IProgress<(long Completed, long Total)>? progress = null)
+    /// <summary>Import sources whose name, avatar and bio came from <paramref name="platform"/>.</summary>
+    private static ContactSource[] SourcesFor(Platform platform) => platform switch
     {
-        var contacts = await ListAsync(ct: ct);
-        return await Task.Run(() => FindConflicts(contacts, ct, progress), ct);
-    }
+        Platform.X => [ContactSource.XFollows, ContactSource.XLookup],
+        Platform.Bluesky => [ContactSource.BlueskyFollows, ContactSource.BlueskySearch],
+        Platform.Mastodon => [ContactSource.MastodonFollows, ContactSource.MastodonSearch],
+        _ => []
+    };
 
-    private static IReadOnlyList<ContactConflict> FindConflicts(List<Contact> contacts, CancellationToken ct,
-        IProgress<(long Completed, long Total)>? progress)
+    private static void ClearIdentity(Contact c, Platform platform)
     {
-        var suggestions = new List<ContactConflict>();
-        var total = (long)contacts.Count * (contacts.Count - 1) / 2;
-        long completed = 0;
-        var reportEvery = Math.Max(1, total / 100);
-        progress?.Report((0, total));
-        for (var i = 0; i < contacts.Count; i++)
+        switch (platform)
         {
-            ct.ThrowIfCancellationRequested();
-            for (var j = i + 1; j < contacts.Count; j++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var a = contacts[i];
-                var b = contacts[j];
-                var reason = SameId(a.XUserId, b.XUserId) || SameId(a.BlueskyDid, b.BlueskyDid) ||
-                    SameId(a.MastodonUri, b.MastodonUri) || SameHandle(a.MastodonAcct, b.MastodonAcct, Platform.Mastodon) ||
-                    SameId(a.LinkedInUrn, b.LinkedInUrn) || SameHandle(a.XUsername, b.XUsername, Platform.X) ||
-                    SameHandle(a.BlueskyHandle, b.BlueskyHandle, Platform.Bluesky) || SameProfile(a.LinkedInProfileUrl, b.LinkedInProfileUrl)
-                    ? "Shared normalized platform identity"
-                    : MatchesHints(a, ImportHints(b.Bio, PlatformSelection.All)) || MatchesHints(b, ImportHints(a.Bio, PlatformSelection.All))
-                        ? "Explicit profile link in a bio"
-                        : SimilarNames(a.DisplayName, b.DisplayName) ? "Similar normalized names — not proof of identity" : null;
-                if (reason is not null) suggestions.Add(new(a, b, reason));
-                completed++;
-                if (completed % reportEvery == 0 || completed == total)
-                    progress?.Report((completed, total));
-            }
+            case Platform.X: c.XUsername = c.XUserId = null; break;
+            case Platform.Bluesky: c.BlueskyHandle = c.BlueskyDid = null; break;
+            case Platform.Mastodon: c.MastodonAcct = c.MastodonUri = c.MastodonProfileUrl = null; break;
+            case Platform.LinkedIn: c.LinkedInProfileUrl = c.LinkedInUrn = c.LinkedInName = null; break;
+            case Platform.Threads: c.ThreadsUsername = null; break;
         }
-        return suggestions;
     }
 
     /// <summary>Loads fresh identities and collisions for a merge preview.</summary>
@@ -237,6 +276,7 @@ public sealed partial class ContactService
         Platform.Mastodon => db.Contacts.Where(c => c.MastodonAcct != null || c.MastodonUri != null || c.MastodonProfileUrl != null),
         Platform.LinkedIn => db.Contacts.Where(c => c.LinkedInProfileUrl != null || c.LinkedInUrn != null ||
             c.LinkedInName != null || c.LinkedInVerifiedByCopilotAtUtc != null),
+        Platform.Threads => db.Contacts.Where(c => c.ThreadsUsername != null),
         _ => throw new ArgumentOutOfRangeException(nameof(p))
     };
 
@@ -260,6 +300,7 @@ public sealed partial class ContactService
         if (Different(a.LinkedInUrn, b.LinkedInUrn, SameId) ||
             Different(a.LinkedInProfileUrl, b.LinkedInProfileUrl, SameProfile) ||
             Different(a.LinkedInName, b.LinkedInName, Same)) result.Add(Platform.LinkedIn);
+        if (Different(a.ThreadsUsername, b.ThreadsUsername, Same)) result.Add(Platform.Threads);
         return result;
     }
 
@@ -282,6 +323,8 @@ public sealed partial class ContactService
             target.MastodonUri = replace ? from.MastodonUri : Nonblank(target.MastodonUri) ?? from.MastodonUri;
             target.MastodonProfileUrl = replace ? from.MastodonProfileUrl : Nonblank(target.MastodonProfileUrl) ?? from.MastodonProfileUrl;
         }
+        else if (platform == Platform.Threads)
+            target.ThreadsUsername = replace ? from.ThreadsUsername : Nonblank(target.ThreadsUsername) ?? from.ThreadsUsername;
         else
         {
             target.LinkedInUrn = replace ? from.LinkedInUrn : Nonblank(target.LinkedInUrn) ?? from.LinkedInUrn;
@@ -289,28 +332,6 @@ public sealed partial class ContactService
             target.LinkedInProfileUrl = replace ? from.LinkedInProfileUrl : Nonblank(target.LinkedInProfileUrl) ?? from.LinkedInProfileUrl;
             target.LinkedInVerifiedByCopilotAtUtc = replace ? from.LinkedInVerifiedByCopilotAtUtc : Later(target.LinkedInVerifiedByCopilotAtUtc, from.LinkedInVerifiedByCopilotAtUtc);
         }
-    }
-
-    private static bool SimilarNames(string a, string b)
-    {
-        static string Clean(string value) => string.Concat(AccountSearchService.CleanName(value)
-            .Normalize(NormalizationForm.FormKC).Where(char.IsLetterOrDigit)).ToLowerInvariant();
-        var left = Clean(a);
-        var right = Clean(b);
-        if (left.Length < 3 || right.Length < 3) return false;
-        if (left == right) return true;
-        if (Math.Min(left.Length, right.Length) < 6 || Math.Abs(left.Length - right.Length) > 1) return false;
-        // At most one edit for reasonably long names; suggestions still require explicit review.
-        var previous = Enumerable.Range(0, right.Length + 1).ToArray();
-        foreach (var c in left)
-        {
-            var next = new int[right.Length + 1];
-            next[0] = previous[0] + 1;
-            for (var j = 1; j <= right.Length; j++)
-                next[j] = Math.Min(Math.Min(next[j - 1] + 1, previous[j] + 1), previous[j - 1] + (c == right[j - 1] ? 0 : 1));
-            previous = next;
-        }
-        return previous[^1] <= 1;
     }
 
     private static void Invalidate(AccountSearch cache, string reason)

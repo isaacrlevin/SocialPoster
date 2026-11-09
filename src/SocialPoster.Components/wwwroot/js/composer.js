@@ -99,5 +99,18 @@ window.socialPoster = {
 
     scrollToTop() {
         window.scrollTo({ top: 0, behavior: 'auto' })
+    },
+
+    /** Saves text as a file download. @returns {string|null} where it was saved, if known (the MAUI app reports it). */
+    downloadFile(fileName, text, mimeType) {
+        const url = URL.createObjectURL(new Blob([text], { type: mimeType || 'application/octet-stream' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return null;
     }
 };

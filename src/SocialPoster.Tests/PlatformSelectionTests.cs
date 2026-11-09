@@ -127,13 +127,45 @@ public class PlatformSelectionTests
         AssertPlatformLabels(contacts, platforms);
         Assert.Equal(platforms.Contains(Platform.X), contacts.Contains("excluded_x"));
         Assert.Equal(platforms.Contains(Platform.LinkedIn), contacts.Contains("linkedin.com/in/jane"));
-        Assert.Equal(platforms.Contains(Platform.Bluesky), contacts.Contains("Sync Bluesky follows"));
+        // Sync actions live in a closed menu, so check what the menu would offer.
+        Assert.Equal(platforms.Contains(Platform.Bluesky), (await host.InspectAsync<Contacts, IReadOnlyList<Platform>>(platforms,
+            page => ContactsPlatforms(page, "SyncPlatforms"))).Contains(Platform.Bluesky));
+        Assert.Equal(platforms.Contains(Platform.Bluesky), contacts.Contains("Sync follows"));
         Assert.Equal(platforms.Contains(Platform.Mastodon), contacts.Contains("Mastodon acct"));
+        // The contact card header and the contact's table row both link its badges to profiles.
+        Assert.Equal(platforms.Contains(Platform.Bluesky) ? 2 : 0,
+            System.Text.RegularExpressions.Regex.Matches(contacts, "<a class=\"pbadge on\" href=\"https://bsky.app/profile/did%3Aplc%3Ajane\"").Count);
 
         var badges = await host.RenderAsync<PlatformBadges>(platforms, new() { [nameof(PlatformBadges.Contact)] = contact });
         Assert.Equal(platforms.Contains(Platform.X), badges.Contains("excluded_x"));
         Assert.Equal(platforms.Contains(Platform.Bluesky), badges.Contains("jane.bsky.social"));
         Assert.Equal(platforms.Contains(Platform.LinkedIn), badges.Contains("LinkedIn"));
+        Assert.DoesNotContain("<a ", badges);
+    }
+
+    [Fact]
+    public async Task Linkable_badges_open_saved_profiles_in_a_new_tab()
+    {
+        await using var host = await RenderHost.CreateAsync();
+        var contact = new Contact
+        {
+            DisplayName = "Jane Doe", Key = "jane", XUsername = "janedoe", BlueskyHandle = "jane.bsky.social",
+            BlueskyDid = "did:plc:jane", LinkedInProfileUrl = "https://www.linkedin.com/in/jane", MastodonAcct = "jane@social.example",
+        };
+        var all = Enum.GetValues<Platform>();
+        var badges = await host.RenderAsync<PlatformBadges>(all, new()
+        {
+            [nameof(PlatformBadges.Contact)] = contact,
+            [nameof(PlatformBadges.Linkable)] = true,
+        });
+        var links = System.Text.RegularExpressions.Regex.Matches(badges, "<a [^>]*>").Select(m => m.Value).ToList();
+        Assert.Equal(4, links.Count); // Threads has no account, so it stays a plain badge.
+        Assert.All(links, a => Assert.Contains("target=\"_blank\"", a));
+        Assert.All(links, a => Assert.Contains("rel=\"noopener noreferrer\"", a));
+        Assert.Contains(links, a => a.Contains("href=\"https://x.com/janedoe\""));
+        Assert.Contains(links, a => a.Contains("href=\"https://bsky.app/profile/did%3Aplc%3Ajane\""));
+        Assert.Contains(links, a => a.Contains("href=\"https://social.example/@jane\""));
+        Assert.Contains(links, a => a.Contains("linkedin.com/in/jane"));
     }
 
     [Fact]
@@ -426,8 +458,9 @@ public class PlatformSelectionTests
             using var scope = host.Provider.CreateScope();
             await scope.ServiceProvider.GetRequiredService<PlatformPreferences>().SetEnabledAsync(Platform.X, false);
         }
-        var html = await host.RenderAsync<Contacts>(selected ? [Platform.X] : [Platform.Bluesky]);
-        Assert.Equal(configured && !intent && selected && preferenceEnabled, html.Contains("Sync X follows"));
+        var offered = await host.InspectAsync<Contacts, IReadOnlyList<Platform>>(selected ? [Platform.X] : [Platform.Bluesky],
+            page => ContactsPlatforms(page, "SyncPlatforms"));
+        Assert.Equal(configured && !intent && selected && preferenceEnabled, offered.Contains(Platform.X));
         Assert.Equal(0, host.Http.RequestCount);
     }
 
@@ -482,6 +515,31 @@ public class PlatformSelectionTests
             });
         }
 
+        /// <summary>Renders <typeparamref name="T"/> and reads state from the live instance, e.g. what a closed menu would offer.</summary>
+        public async Task<TResult> InspectAsync<T, TResult>(Platform[]? platforms, Func<T, TResult> read) where T : IComponent
+        {
+            await using var scope = Provider.CreateAsyncScope();
+            await using var renderer = new HtmlRenderer(scope.ServiceProvider, Provider.GetRequiredService<ILoggerFactory>());
+            var parameters = new Dictionary<string, object?>();
+            if (platforms is not null) parameters[nameof(PlatformComponent.Platforms)] = platforms;
+            return await renderer.Dispatcher.InvokeAsync(async () =>
+            {
+                T? instance = default;
+                var output = await renderer.RenderComponentAsync<WithProviders>(ParameterView.FromDictionary(new Dictionary<string, object?>
+                {
+                    [nameof(WithProviders.ChildContent)] = (RenderFragment)(builder =>
+                    {
+                        builder.OpenComponent<T>(0);
+                        builder.AddMultipleAttributes(1, parameters.Select(p => new KeyValuePair<string, object>(p.Key, p.Value!)));
+                        builder.AddComponentReferenceCapture(2, component => instance = (T)component);
+                        builder.CloseComponent();
+                    })
+                }));
+                await output.QuiescenceTask;
+                return read(instance!);
+            });
+        }
+
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
@@ -522,6 +580,10 @@ public class PlatformSelectionTests
             builder.AddContent(1, ChildContent);
         }
     }
+
+    internal static IReadOnlyList<Platform> ContactsPlatforms(Contacts page, string property) =>
+        (IReadOnlyList<Platform>)typeof(Contacts).GetProperty(property,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(page)!;
 
     private sealed class EditingContacts : Contacts
     {

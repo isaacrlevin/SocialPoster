@@ -9,12 +9,13 @@
   <meta property="og:description" content="Write one post and publish it to X, Bluesky, LinkedIn, Mastodon and Threads, with mentions converted correctly for each platform.">
   <meta property="og:image" content="img/compose.png">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b5bf0'/%3E%3Cpath d='M8 16l16-7-5 14-3-6z' fill='white'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg">
+  <link rel="apple-touch-icon" href="img/logo-square.png">
 </head>
 <body>
 
 <header class="hero">
-  <div class="logo" aria-hidden="true">➤</div>
+  <img class="logo" src="img/logo.svg" alt="" width="72" height="72">
   <h1>SocialPoster</h1>
   <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong>, <strong>Mastodon</strong> and <strong>Threads</strong>, now or on a schedule, with @-mentions converted correctly for each platform.</p>
   <div class="btns">
@@ -161,7 +162,7 @@ dotnet add package SocialPoster.Components   # the full Blazor UI</code></pre>
       <h3 id="linkedin"><span class="platform p-li">in</span>LinkedIn: get an access token</h3>
       <p>LinkedIn doesn't offer a "sign in and post" option for personal tools, so you create a small developer app and generate an access token for yourself. It's free and takes about five minutes. LinkedIn occasionally renames things in its portal, so labels may differ slightly.</p>
       <ol class="steps">
-        <li><strong>Create an app.</strong> Go to the <a href="https://www.linkedin.com/developers/apps">LinkedIn Developer Portal</a> and click <strong>Create app</strong>. Give it a name (for example "SocialPoster"), pick a <strong>LinkedIn Page</strong> to associate it with (create a free placeholder page if you don't have one), upload any logo, accept the terms and create it. If LinkedIn asks you to verify the app against the page, use <em>Settings → Verify</em> and have a page admin (usually you) approve it.</li>
+        <li><strong>Create an app.</strong> Go to the <a href="https://www.linkedin.com/developers/apps">LinkedIn Developer Portal</a> and click <strong>Create app</strong>. Give it a name (for example "SocialPoster"), pick a <strong>LinkedIn Page</strong> to associate it with (create a free placeholder page if you don't have one), upload a logo (the <a href="img/logo-square.png">SocialPoster logo</a> works), accept the terms and create it. If LinkedIn asks you to verify the app against the page, use <em>Settings → Verify</em> and have a page admin (usually you) approve it.</li>
         <li><strong>Request the products.</strong> On the <em>Products</em> tab request both of these. They're self-serve and normally approved immediately:
           <ul>
             <li><strong>Share on LinkedIn</strong>, which grants <code>w_member_social</code> and is needed to post</li>
@@ -422,7 +423,8 @@ dotnet add package SocialPoster.Posting      # just posting</code></pre>
 
 <footer>
   <p>SocialPoster is open source under the <a href="https://github.com/isaacrlevin/SocialPoster/blob/main/LICENSE">MIT license</a>.
-  Issues and pull requests are welcome on <a href="https://github.com/isaacrlevin/SocialPoster">GitHub</a>.</p>
+  Issues and pull requests are welcome on <a href="https://github.com/isaacrlevin/SocialPoster">GitHub</a>.
+  <a href="privacy.html">Privacy policy</a>.</p>
 </footer>
 
 </body>

@@ -3,12 +3,15 @@
         <MudText Typo="Typo.h6">@Review.Incoming.DisplayName</MudText>
         <MudText Class="mb-3">@Review.Reason</MudText>
         <MudText Class="mb-3">Sync is paused. The incoming account has not been saved. Choose a saved contact to review its complete identities and confirm a merge, keep this account separate, skip it, or cancel the remaining sync.</MudText>
-        @foreach (var preview in Review.Candidates)
+        @foreach (var (preview, likelihood) in ranked)
         {
-            <MudButton FullWidth="true" Variant="Variant.Outlined" Class="mb-2"
-                       OnClick="() => Dialog.Close(DialogResult.Ok(new ContactImportDecision(ImportReviewAction.Merge, preview.Left.Id)))">
-                Review @preview.Left.DisplayName (@preview.Left.Key)
-            </MudButton>
+            <div class="d-flex align-center gap-2 mb-2">
+                <LikelihoodChip Score="@likelihood.Score" />
+                <MudButton FullWidth="true" Variant="Variant.Outlined"
+                           OnClick="() => Dialog.Close(DialogResult.Ok(new ContactImportDecision(ImportReviewAction.Merge, preview.Left.Id)))">
+                    Review @preview.Left.DisplayName (@preview.Left.Key)@(likelihood.HasSignal ? $" — {likelihood.Summary}" : "")
+                </MudButton>
+            </div>
         }
         <MudAlert Severity="Severity.Info">Keeping separate cannot duplicate an identity already owned by a saved contact. Any changes made during review require a fresh sync preview.</MudAlert>
     </DialogContent>
@@ -22,5 +25,9 @@
 @code {
     [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter, EditorRequired] public ContactImportReview Review { get; set; } = default!;
+    private IReadOnlyList<(ContactMergePreview Preview, DuplicateLikelihood Likelihood)> ranked = [];
+    // Most likely matches first; scores are evidence for review, never an automatic decision.
+    protected override void OnParametersSet() => ranked = Review.Candidates
+        .Select(p => (p, ContactService.ScoreDuplicate(p.Left, p.Right))).OrderByDescending(r => r.Item2.Score).ToList();
     private void Choose(ImportReviewAction action) => Dialog.Close(DialogResult.Ok(new ContactImportDecision(action)));
 }
