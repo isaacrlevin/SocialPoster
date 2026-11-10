@@ -92,6 +92,9 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
     /// <summary>Threads' error_subcode for "Invalid Link Attachment", returned when the link card can't be built.</summary>
     public const int InvalidLinkAttachmentSubcode = 4279047;
 
+    /// <summary>Threads' error_subcode for "Media Not Found", returned when publishing a container it can't see yet.</summary>
+    public const int MediaNotFoundSubcode = 4279009;
+
     private async Task<string> CreateAndPublishAsync(string token, string userId, string text, string? linkCardUrl, CancellationToken ct)
     {
         var fields = new Dictionary<string, string>
@@ -103,13 +106,58 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
         if (!string.IsNullOrWhiteSpace(linkCardUrl)) fields["link_attachment"] = linkCardUrl;
         using var create = new FormUrlEncodedContent(fields);
         var container = await SendAsync(token, HttpMethod.Post, $"{userId}/threads", create, ct);
+        var containerId = RequiredString(container, "id");
 
-        using var publish = new FormUrlEncodedContent(new Dictionary<string, string>
+        // Threads processes containers asynchronously (a link card means crawling the page first). Publishing before
+        // processing finishes fails with "The media with id ... cannot be found", so wait for FINISHED first.
+        await WaitForContainerAsync(token, containerId, ct);
+
+        for (var attempt = 1; ; attempt++)
         {
-            ["creation_id"] = RequiredString(container, "id"),
-        });
-        var published = await SendAsync(token, HttpMethod.Post, $"{userId}/threads_publish", publish, ct);
-        return RequiredString(published, "id");
+            using var publish = new FormUrlEncodedContent(new Dictionary<string, string> { ["creation_id"] = containerId });
+            try
+            {
+                var published = await SendAsync(token, HttpMethod.Post, $"{userId}/threads_publish", publish, ct);
+                return RequiredString(published, "id");
+            }
+            catch (ThreadsApiException ex) when (ex.IsMediaNotFound && attempt < MaxPublishAttempts)
+            {
+                // The status endpoint can report FINISHED a moment before publish can see the container.
+                await Task.Delay(PollDelay, ct);
+            }
+        }
+    }
+
+    /// <summary>Delay between container status checks and publish retries. Settable so tests don't wait.</summary>
+    internal TimeSpan PollDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+    internal const int MaxStatusChecks = 30;
+    internal const int MaxPublishAttempts = 3;
+
+    private async Task WaitForContainerAsync(string token, string containerId, CancellationToken ct)
+    {
+        var path = $"{Uri.EscapeDataString(containerId)}?fields=status,error_message";
+        for (var check = 1; ; check++)
+        {
+            var data = await SendAsync(token, HttpMethod.Get, path, null, ct);
+            var status = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("status", out var s) && s.ValueKind == JsonValueKind.String
+                ? s.GetString() : null;
+            switch (status)
+            {
+                case "FINISHED":
+                    return;
+                case "ERROR":
+                case "EXPIRED":
+                    var reason = data.TryGetProperty("error_message", out var m) && m.ValueKind == JsonValueKind.String ? " " + m.GetString() : "";
+                    throw new InvalidOperationException($"Threads could not process the post (status {status}).{reason}");
+                case "PUBLISHED":
+                    throw new InvalidOperationException("Threads reports this container was already published.");
+            }
+            // IN_PROGRESS (or no status yet): keep waiting.
+            if (check >= MaxStatusChecks)
+                throw new TimeoutException($"Threads was still processing the post after {MaxStatusChecks} status checks.");
+            await Task.Delay(PollDelay, ct);
+        }
     }
 
     private async Task<JsonElement> SendAsync(string token, HttpMethod method, string path, HttpContent? content, CancellationToken ct)
@@ -124,6 +172,7 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
         {
             var detail = "";
             int? subcode = null;
+            var mediaNotFound = false;
             try
             {
                 using var json = JsonDocument.Parse(text);
@@ -135,6 +184,8 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
                         : error.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String ? message.GetString() : null;
                     if (!string.IsNullOrWhiteSpace(reason)) detail = " " + reason.Replace(token, "[redacted]", StringComparison.Ordinal);
                     if (error.TryGetProperty("error_subcode", out var sub) && sub.ValueKind == JsonValueKind.Number && sub.TryGetInt32(out var value)) subcode = value;
+                    mediaNotFound = subcode == MediaNotFoundSubcode ||
+                        (reason?.Contains("cannot be found", StringComparison.OrdinalIgnoreCase) ?? false);
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException)
@@ -143,7 +194,11 @@ public sealed class ThreadsClient(HttpClient http, ICredentialStore secrets)
                 ? " Check that the token is valid and has the threads_basic and threads_content_publish permissions."
                 : response.StatusCode == HttpStatusCode.TooManyRequests ? " Rate limited; retry later." : "";
             if (subcode == InvalidLinkAttachmentSubcode) advice = "";
-            throw new ThreadsApiException($"Threads API returned {(int)response.StatusCode}.{detail}{advice}", response.StatusCode, subcode);
+            if (mediaNotFound) advice = " Threads had not finished processing the post container.";
+            throw new ThreadsApiException($"Threads API returned {(int)response.StatusCode}.{detail}{advice}", response.StatusCode, subcode)
+            {
+                IsMediaNotFound = mediaNotFound,
+            };
         }
         try { using var json = JsonDocument.Parse(text); return json.RootElement.Clone(); }
         catch (JsonException ex) { throw new InvalidOperationException("Threads returned an invalid JSON response.", ex); }
@@ -164,4 +219,7 @@ public sealed class ThreadsApiException(string message, HttpStatusCode statusCod
     : HttpRequestException(message, null, statusCode)
 {
     public int? ErrorSubcode { get; } = errorSubcode;
+
+    /// <summary>True when Threads said the media container cannot be found (usually: not finished processing yet).</summary>
+    public bool IsMediaNotFound { get; init; }
 }

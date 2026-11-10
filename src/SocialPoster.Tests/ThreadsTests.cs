@@ -73,16 +73,18 @@ public class ThreadsTests
         await using var host = await Host.CreateAsync();
         await host.ConfigureAsync();
         host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"id":"thread9"}""");
         host.Http.Add("""{"id":"thread9","permalink":"https://www.threads.com/@jane/post/abc"}""");
         var url = await host.Client.PostAsync(Post("Hello & welcome"), []);
         Assert.Equal("https://www.threads.com/@jane/post/abc", url);
-        Assert.Equal(3, host.Http.Requests.Count);
+        Assert.Equal(4, host.Http.Requests.Count);
         Assert.Equal("https://graph.threads.net/v1.0/123/threads", host.Http.Requests[0].Url);
         Assert.Equal("media_type=TEXT&text=Hello+%26+welcome", host.Http.Requests[0].Body);
-        Assert.Equal("https://graph.threads.net/v1.0/123/threads_publish", host.Http.Requests[1].Url);
-        Assert.Equal("creation_id=container1", host.Http.Requests[1].Body);
-        Assert.Equal("https://graph.threads.net/v1.0/thread9?fields=permalink", host.Http.Requests[2].Url);
+        Assert.Equal("https://graph.threads.net/v1.0/container1?fields=status,error_message", host.Http.Requests[1].Url);
+        Assert.Equal("https://graph.threads.net/v1.0/123/threads_publish", host.Http.Requests[2].Url);
+        Assert.Equal("creation_id=container1", host.Http.Requests[2].Body);
+        Assert.Equal("https://graph.threads.net/v1.0/thread9?fields=permalink", host.Http.Requests[3].Url);
         Assert.All(host.Http.Requests, r => Assert.Equal("Bearer original-token", r.Auth));
     }
 
@@ -100,6 +102,7 @@ public class ThreadsTests
         await using var host = await Host.CreateAsync();
         await host.ConfigureAsync();
         host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"id":"thread9"}""");
         host.Http.Add("""{"id":"thread9","permalink":"https://www.threads.com/@jane/post/abc"}""");
         await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
@@ -115,16 +118,18 @@ public class ThreadsTests
         await using var host = await Host.CreateAsync();
         await host.ConfigureAsync();
         host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
         host.Http.Add("""{"id":"container2"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"id":"thread9"}""");
         host.Http.Add("""{"id":"thread9","permalink":"https://www.threads.com/@jane/post/abc"}""");
         var url = await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
         Assert.Equal("https://www.threads.com/@jane/post/abc", url);
-        Assert.Equal(5, host.Http.Requests.Count);
+        Assert.Equal(7, host.Http.Requests.Count);
         Assert.Contains("link_attachment=", host.Http.Requests[0].Body);
-        Assert.Equal("media_type=TEXT&text=New+post+https%3A%2F%2Fisaacl.dev%2Faca", host.Http.Requests[2].Body);
-        Assert.Equal("creation_id=container2", host.Http.Requests[3].Body);
+        Assert.Equal("media_type=TEXT&text=New+post+https%3A%2F%2Fisaacl.dev%2Faca", host.Http.Requests[3].Body);
+        Assert.Equal("creation_id=container2", host.Http.Requests[5].Body);
     }
 
     [Fact]
@@ -134,6 +139,7 @@ public class ThreadsTests
         await host.ConfigureAsync();
         host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
         host.Http.Add("""{"id":"container2"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"id":"thread9"}""");
         host.Http.Add("""{"permalink":"https://www.threads.com/@jane/post/abc"}""");
         await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
@@ -141,9 +147,10 @@ public class ThreadsTests
 
         host.Http.Requests.Clear();
         host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"error":{"message":"Rate limited","code":4}}""", HttpStatusCode.BadRequest);
         await Assert.ThrowsAsync<ThreadsApiException>(() => host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []));
-        Assert.Equal(2, host.Http.Requests.Count);
+        Assert.Equal(3, host.Http.Requests.Count);
     }
 
     [Fact]
@@ -152,10 +159,64 @@ public class ThreadsTests
         await using var host = await Host.CreateAsync();
         await host.ConfigureAsync();
         host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add(InvalidLinkAttachment, HttpStatusCode.BadRequest);
         var ex = await Assert.ThrowsAsync<ThreadsApiException>(() => host.Client.PostAsync(Post("No links"), []));
         Assert.Equal(ThreadsClient.InvalidLinkAttachmentSubcode, ex.ErrorSubcode);
         Assert.Contains("invalid link attachment", ex.Message);
+    }
+
+    private const string MediaNotFound = """{"error":{"message":"The media with id 17995815750109847 cannot be found.","type":"OAuthException","code":24,"error_subcode":4279009}}""";
+
+    [Fact]
+    public async Task Publish_waits_until_the_container_finishes_processing()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"IN_PROGRESS"}""");
+        host.Http.Add("""{"status":"IN_PROGRESS"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
+        host.Http.Add("""{"id":"thread9"}""");
+        host.Http.Add("""{"permalink":"https://www.threads.com/@jane/post/abc"}""");
+        await host.Client.PostAsync(Post("New post https://isaacl.dev/aca"), []);
+        Assert.Equal(6, host.Http.Requests.Count);
+        Assert.Equal("creation_id=container1", host.Http.Requests[4].Body);
+    }
+
+    [Fact]
+    public async Task Container_processing_error_is_reported_without_publishing()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"ERROR","error_message":"FAILED_PROCESSING"}""");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => host.Client.PostAsync(Post(), []));
+        Assert.Contains("FAILED_PROCESSING", ex.Message);
+        Assert.Equal(2, host.Http.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Media_not_found_on_publish_is_retried_then_reported_without_permission_advice()
+    {
+        await using var host = await Host.CreateAsync();
+        await host.ConfigureAsync();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
+        host.Http.Add(MediaNotFound, HttpStatusCode.BadRequest);
+        host.Http.Add("""{"id":"thread9"}""");
+        host.Http.Add("""{"permalink":"https://www.threads.com/@jane/post/abc"}""");
+        await host.Client.PostAsync(Post(), []);
+        Assert.Equal(5, host.Http.Requests.Count);
+
+        host.Http.Requests.Clear();
+        host.Http.Add("""{"id":"container1"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
+        for (var i = 0; i < ThreadsClient.MaxPublishAttempts; i++) host.Http.Add(MediaNotFound, HttpStatusCode.BadRequest);
+        var ex = await Assert.ThrowsAsync<ThreadsApiException>(() => host.Client.PostAsync(Post(), []));
+        Assert.True(ex.IsMediaNotFound);
+        Assert.DoesNotContain("permissions", ex.Message);
+        Assert.Equal(2 + ThreadsClient.MaxPublishAttempts, host.Http.Requests.Count);
     }
 
     [Fact]
@@ -190,6 +251,7 @@ public class ThreadsTests
         await host.ConfigureAsync();
         Assert.True((await host.Publisher.GetStatusAsync([Platform.Threads])).IsConnected(Platform.Threads));
         host.Http.Add("""{"id":"c"}""");
+        host.Http.Add("""{"status":"FINISHED"}""");
         host.Http.Add("""{"id":"t"}""");
         host.Http.Add("""{"permalink":"https://www.threads.com/@jane/post/xyz"}""");
         var result = Assert.Single(await host.Publisher.PublishAsync("Hello", new Dictionary<Platform, string> { [Platform.Threads] = "Hello" }));
@@ -232,7 +294,7 @@ public class ThreadsTests
             await db.Database.EnsureCreatedAsync();
             host.Secrets = new(host, new EphemeralDataProtectionProvider());
             host.HttpClient = new(host.Http);
-            host.Client = new(host.HttpClient, host.Secrets);
+            host.Client = new(host.HttpClient, host.Secrets) { PollDelay = TimeSpan.Zero };
             var x = new XClient(host.HttpClient, host.Secrets);
             var bluesky = new BlueskyClient(host.HttpClient, host.Secrets);
             var contacts = new ContactService(host, bluesky, x, Microsoft.Extensions.Logging.Abstractions.NullLogger<ContactService>.Instance);
