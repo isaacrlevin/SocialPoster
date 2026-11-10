@@ -68,7 +68,9 @@ jobs:
       - run: dotnet test --configuration Release --no-build
         working-directory: src
 
-  # Desktop app for Windows: a self-contained, unpackaged build zipped per architecture.
+  # Desktop app for Windows: a self-contained, unpackaged build with an Inno Setup installer per architecture, for
+  # GitHub Releases. The installer is unsigned, so SmartScreen offers "Run anyway"; an unsigned MSIX can't be
+  # installed at all, which is why the MSIX (below) is only for the Store, which signs it.
   # The desktop jobs build on every run (to catch packaging breaks) but only upload artifacts when releasing, since
   # they're large and count against Actions storage. `version` is skipped on PRs, hence the !failure() condition.
   desktop-windows:
@@ -101,9 +103,6 @@ jobs:
           }
           if (-not (Test-Path artifacts/SocialPoster/SocialPoster.MAUI.exe)) { throw 'SocialPoster.MAUI.exe not found in the publish output.' }
 
-          # Portable zip.
-          7z a -tzip artifacts/SocialPoster-windows-${{ matrix.arch }}.zip ./artifacts/SocialPoster
-
           # Installer (Inno Setup). The version comes from the csproj so it matches the release tag.
           choco install innosetup --no-progress -y
           $version = ([xml](Get-Content src/SocialPoster.MAUI/SocialPoster.MAUI.csproj)).Project.PropertyGroup.ApplicationDisplayVersion | Where-Object { $_ } | Select-Object -First 1
@@ -115,9 +114,7 @@ jobs:
 #        if: needs.version.outputs.release == 'true'
 #        with:
 #          name: desktop-windows-${{ matrix.arch }}
-#          path: |
-#            artifacts/*.zip
-#            artifacts/*-setup.exe
+#          path: artifacts/*-setup.exe
 #          retention-days: 1
 
   # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). Upload the
@@ -198,7 +195,7 @@ jobs:
           --framework net11.0-maccatalyst -m:1
           -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=-
         working-directory: src
-      - name: Zip
+      - name: Collect app
         run: |
           app=$(find src/SocialPoster.MAUI/bin/Release -mindepth 2 -maxdepth 2 -name '*.app' -type d | head -n 1)
           if [ -z "$app" ]; then echo "No .app bundle found:"; find src/SocialPoster.MAUI/bin -name '*.app' -type d; exit 1; fi
@@ -206,7 +203,6 @@ jobs:
           codesign --verify --deep --strict "$app"
           mkdir -p artifacts
           ditto "$app" artifacts/SocialPoster.app
-          ditto -c -k --sequesterRsrc --keepParent artifacts/SocialPoster.app artifacts/SocialPoster-macos.zip
       # Disk image with an Applications shortcut for drag-to-install. Mac Catalyst apps bundle the .NET runtime.
       - name: Create DMG
         run: |
@@ -219,9 +215,7 @@ jobs:
 #        if: needs.version.outputs.release == 'true'
 #        with:
 #          name: desktop-macos
-#          path: |
-#            artifacts/SocialPoster-macos.zip
-#            artifacts/SocialPoster-macos.dmg
+#          path: artifacts/SocialPoster-macos.dmg
 #          retention-days: 1
 
   # Creates the tag and GitHub release (with generated notes) on this commit and attaches the desktop apps. Runs after
@@ -247,7 +241,7 @@ jobs:
         run: |
           ls -l dist
           gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
-          gh release upload "$TAG" dist/*.zip dist/*-setup.exe dist/*.dmg --clobber
+          gh release upload "$TAG" dist/*-setup.exe dist/*.dmg --clobber
       # The files now live on the release (which doesn't count against Actions storage), so drop the artifact copies.
       - name: Delete desktop artifacts
         env:

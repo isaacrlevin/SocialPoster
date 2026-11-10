@@ -90,18 +90,17 @@
       <p>Prebuilt apps are attached to every <a href="https://github.com/isaacrlevin/SocialPoster/releases/latest">GitHub release</a>.</p>
       <p><strong>Windows</strong> (Windows 10 version 1809 or later, with the <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>)</p>
       <ol>
-        <li>Download <code>SocialPoster-windows-x64.zip</code> (most PCs) or <code>SocialPoster-windows-arm64.zip</code> (Windows on Arm).</li>
-        <li>Right-click it, choose <em>Extract All</em>, and move the <code>SocialPoster</code> folder somewhere permanent, such as <code>%LOCALAPPDATA%\Programs\SocialPoster</code>.</li>
-        <li>Run <code>SocialPoster.MAUI.exe</code>. Pin it to Start or create a desktop shortcut to find it again.</li>
-        <li>The app isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em> the first time. Choose <em>More info → Run anyway</em>.</li>
+        <li>Download <code>SocialPoster-windows-x64-setup.exe</code> (most PCs) or <code>SocialPoster-windows-arm64-setup.exe</code> (Windows on Arm).</li>
+        <li>Run it. The installer isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em>. Choose <em>More info → Run anyway</em>.</li>
+        <li>Follow the installer. It installs just for you by default (no admin prompt) and adds SocialPoster to the Start menu. Uninstall it from <em>Settings → Apps</em>.</li>
       </ol>
       <p><strong>macOS</strong> (macOS 12 or later, Intel or Apple silicon)</p>
       <ol>
-        <li>Download <code>SocialPoster-macos.zip</code>, open it and drag <code>SocialPoster.app</code> into <em>Applications</em>.</li>
+        <li>Download <code>SocialPoster-macos.dmg</code>, open it and drag <code>SocialPoster.app</code> onto the <em>Applications</em> shortcut.</li>
         <li>The app isn't notarized, so macOS blocks it the first time. Open it once, then go to <em>System Settings → Privacy &amp; Security</em> and click <em>Open Anyway</em>. Or run <code>xattr -dr com.apple.quarantine /Applications/SocialPoster.app</code> in Terminal.</li>
         <li>To use GitHub Copilot as the agent, install the Copilot CLI (<code>npm install -g @github/copilot</code>) and run <code>copilot login</code>. The Windows app includes it; the Mac app doesn't.</li>
       </ol>
-      <p>To update, replace the folder or app with the new release; your data is stored separately and kept. Scheduled posts go out while the window is open, and links open in your default browser.</p>
+      <p>To update, run the newer Windows installer, or drag the new app from the newer disk image into <em>Applications</em> on a Mac; your data is stored separately and kept. Scheduled posts go out while the window is open, and links open in your default browser.</p>
       <details>
         <summary>Build the desktop app from source</summary>
         <p>Install the .NET 10 SDK and the MAUI workload once (<code>maui-windows</code> on Windows, <code>maui-maccatalyst</code> on macOS, which also needs Xcode), then run it:</p>

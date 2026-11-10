@@ -427,23 +427,21 @@ web server. Prebuilt apps are attached to every release, and you don't need .NET
 
 **Windows**
 
-1. From the [latest release][releases], download `SocialPoster-windows-x64.zip` (most PCs) or
-   `SocialPoster-windows-arm64.zip` (Windows on Arm, such as Snapdragon laptops).
-2. Right-click the zip, choose **Extract All**, and move the extracted `SocialPoster` folder somewhere permanent, for
-   example `%LOCALAPPDATA%\Programs\SocialPoster`.
-3. Run `SocialPoster.MAUI.exe` in that folder. To find it again, right-click it and choose **Pin to Start**, or
-   **Show more options → Send to → Desktop (create shortcut)**.
-4. The app isn't code-signed, so the first time, Windows SmartScreen may say *Windows protected your PC*. Choose
+1. From the [latest release][releases], download `SocialPoster-windows-x64-setup.exe` (most PCs) or
+   `SocialPoster-windows-arm64-setup.exe` (Windows on Arm, such as Snapdragon laptops).
+2. Run it. The installer isn't code-signed, so Windows SmartScreen may say *Windows protected your PC*. Choose
    **More info → Run anyway**.
+3. Follow the installer. By default it installs just for you (no admin prompt) and adds SocialPoster to the Start
+   menu; you can also ask for a desktop shortcut.
 
-To update, close the app and replace the folder with the new release. Your data is stored elsewhere (see
-[Configuration](#configuration)), so it's kept.
+To update, run the newer installer; it replaces the previous version. To uninstall, use **Settings → Apps → Installed
+apps**. Your data is stored elsewhere (see [Configuration](#configuration)), so updating or uninstalling keeps it.
 
 **macOS**
 
-1. From the [latest release][releases], download `SocialPoster-macos.zip`. It's a universal app for Intel and Apple
+1. From the [latest release][releases], download `SocialPoster-macos.dmg`. It's a universal app for Intel and Apple
    silicon Macs.
-2. Open the zip (Safari usually unzips it for you) and drag `SocialPoster.app` into **Applications**.
+2. Open the disk image and drag `SocialPoster.app` onto the **Applications** shortcut next to it, then eject the image.
 3. The app is ad-hoc signed, not signed with an Apple Developer ID or notarized, so macOS blocks it the first time.
    Open it once, then go to **System Settings → Privacy & Security**, scroll to the message about SocialPoster and
    click **Open Anyway**. Or remove the download quarantine in Terminal:
@@ -459,7 +457,8 @@ To update, close the app and replace the folder with the new release. Your data 
    copilot login
    ```
 
-To update, quit the app and replace `SocialPoster.app` with the new one.
+To update, quit the app and drag the new `SocialPoster.app` from the newer disk image into **Applications**, replacing
+the old one.
 
 **What to know**
 
@@ -499,8 +498,9 @@ an unpackaged desktop app; on macOS it is a Mac Catalyst app. If the build says 
 the Mac Catalyst SDK, update Xcode or build against an older SDK pack, for example
 `dotnet run -p:MacCatalystSdkVersion=26.0` with Xcode 26.0 (each SDK pack needs its matching Xcode version).
 
-To produce the same zips as a release, run the `dotnet publish` commands from the `desktop-windows` and `desktop-macos`
-jobs in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+To produce the same installer and disk image as a release, run the `dotnet publish` and packaging steps from the
+`desktop-windows` (Inno Setup, script in `installers/windows/SocialPoster.iss`) and `desktop-macos` (`hdiutil`) jobs in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ### 2. Host the Web project
 
@@ -1038,8 +1038,8 @@ through the API.
 ## Contributing
 
 Issues and pull requests are welcome. Please run `dotnet build` and `dotnet test` from the `src` folder before
-submitting (CI runs both on Linux and Windows, and publishes the desktop app for Windows and macOS; each run's
-**Artifacts** include the zips for trying a change). Building the whole solution on Windows or macOS needs the MAUI
+submitting (CI runs both on Linux and Windows, and builds the Windows installer, the macOS disk image and the
+Store MSIX to catch packaging breaks). Building the whole solution on Windows or macOS needs the MAUI
 workload (see [Build it from source](#1-use-the-desktop-app-windows-and-macos)); on Linux
 `SocialPoster.MAUI` builds as an empty placeholder. Keep platform posting in `SocialPoster.Posting`, app services and
 storage in `SocialPoster.Core`, reusable UI in `SocialPoster.Components`, and hosting policy in the Web and MAUI hosts, with
@@ -1068,8 +1068,9 @@ app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialP
   Posting README and `docs/index.html`), commit, and push to `main`. There's no tag to push: the CI `version` job reads
   the version (and fails if the four don't match), and if there's no `v<version>` tag yet, the release runs. The
   `publish` job packs and pushes to nuget.org, then the `release` job creates the tag and GitHub release on that commit
-  (with generated notes) and attaches `SocialPoster-windows-x64.zip`, `SocialPoster-windows-arm64.zip` and
-  `SocialPoster-macos.zip`. If publishing fails, no tag is created, so the next push to `main` (or a manual run of the
+  (with generated notes) and attaches `SocialPoster-windows-x64-setup.exe`,
+  `SocialPoster-windows-arm64-setup.exe` and `SocialPoster-macos.dmg`. The Store MSIX (from the `desktop-windows-store`
+  job) isn't attached; it's uploaded to Partner Center by hand. If publishing fails, no tag is created, so the next push to `main` (or a manual run of the
   workflow) tries again. The `publish` job pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
