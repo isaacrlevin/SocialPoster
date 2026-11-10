@@ -64,7 +64,11 @@ jobs:
         working-directory: src
 
   # Desktop app for Windows: a self-contained, unpackaged build zipped per architecture.
+  # The desktop jobs build on every run (to catch packaging breaks) but only upload artifacts when releasing, since
+  # they're large and count against Actions storage. `version` is skipped on PRs, hence the !failure() condition.
   desktop-windows:
+    needs: version
+    if: ${{ !cancelled() && !failure() }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -102,17 +106,20 @@ jobs:
           & $iscc "/DAppVersion=$version" "/DArch=${{ matrix.arch }}" "/DSourceDir=$PWD\artifacts\SocialPoster" "/DOutputDir=$PWD\artifacts" installers/windows/SocialPoster.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
       - uses: actions/upload-artifact@v4
+        if: needs.version.outputs.release == 'true'
         with:
           name: desktop-windows-${{ matrix.arch }}
           path: |
             artifacts/*.zip
             artifacts/*-setup.exe
-          retention-days: 7
+          retention-days: 1
 
   # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). Upload the
   # artifacts to Partner Center by hand. Until the Store* identity in SocialPoster.MAUI.csproj is filled in, this
   # builds with a placeholder identity to check that packaging still works, and uploads nothing.
   desktop-windows-store:
+    needs: version
+    if: ${{ !cancelled() && !failure() }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -152,14 +159,16 @@ jobs:
           Copy-Item $msix.FullName artifacts/store/
           Get-ChildItem artifacts/store
       - uses: actions/upload-artifact@v4
-        if: steps.identity.outputs.configured == 'true'
+        if: steps.identity.outputs.configured == 'true' && needs.version.outputs.release == 'true'
         with:
           name: store-windows-${{ matrix.arch }}
           path: artifacts/store/*.msix
-          retention-days: 30
+          retention-days: 14
 
   # Desktop app for macOS (Mac Catalyst, Intel and Apple silicon). Can only be built on macOS.
   desktop-macos:
+    needs: version
+    if: ${{ !cancelled() && !failure() }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -198,12 +207,13 @@ jobs:
           ln -s /Applications dmg/Applications
           hdiutil create -volname SocialPoster -srcfolder dmg -ov -format UDZO artifacts/SocialPoster-macos.dmg
       - uses: actions/upload-artifact@v4
+        if: needs.version.outputs.release == 'true'
         with:
           name: desktop-macos
           path: |
             artifacts/SocialPoster-macos.zip
             artifacts/SocialPoster-macos.dmg
-          retention-days: 7
+          retention-days: 1
 
   # Creates the tag and GitHub release (with generated notes) on this commit and attaches the desktop apps. Runs after
   # publish, so a failed NuGet push leaves no tag and the next run on main tries the release again.
@@ -213,6 +223,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write # to delete this run's desktop artifacts once they're on the release
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -228,6 +239,14 @@ jobs:
           ls -l dist
           gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA"
           gh release upload "$TAG" dist/*.zip dist/*-setup.exe dist/*.dmg --clobber
+      # The files now live on the release (which doesn't count against Actions storage), so drop the artifact copies.
+      - name: Delete desktop artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name | startswith("desktop-")) | .id' |
+            while read -r id; do gh api -X DELETE "repos/$GH_REPO/actions/artifacts/$id"; done
 
   publish:
     needs: [version, build]
