@@ -7,7 +7,7 @@ This is the posting engine behind [SocialPoster](https://github.com/isaacrlevin/
 
 ## Install
 
-Requires .NET 10. Add the package with the .NET CLI:
+Requires .NET 11. Add the package with the .NET CLI:
 
 ```bash
 dotnet add package SocialPoster.Posting
