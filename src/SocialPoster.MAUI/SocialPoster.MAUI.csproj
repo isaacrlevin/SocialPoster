@@ -2,9 +2,9 @@
 
     <PropertyGroup>
         <!-- Desktop only: Windows when building on Windows, Mac Catalyst when building on macOS. -->
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net11.0-windows10.0.19041.0</TargetFrameworks>
         <!-- MacCatalystSdkVersion (for example 26.0) builds against an older SDK pack when Xcode is behind the newest one. -->
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst$(MacCatalystSdkVersion)</TargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net11.0-maccatalyst$(MacCatalystSdkVersion)</TargetFrameworks>
         <IsMauiPlatform Condition="'$(TargetFrameworks)' != ''">true</IsMauiPlatform>
 
         <OutputType>Exe</OutputType>
@@ -33,7 +33,7 @@
 
     <!-- Linux has no MAUI desktop target: build an empty placeholder so `dotnet build` of the solution still works. -->
     <PropertyGroup Condition="'$(IsMauiPlatform)' != 'true'">
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <OutputType>Library</OutputType>
         <UseMaui>false</UseMaui>
         <EnableDefaultItems>false</EnableDefaultItems>
@@ -89,9 +89,9 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(IsMauiPlatform)' == 'true'">
-        <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
-        <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
+        <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.130" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.130" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
         <ProjectReference Include="..\SocialPoster.Components\SocialPoster.Components.csproj" />
     </ItemGroup>
 

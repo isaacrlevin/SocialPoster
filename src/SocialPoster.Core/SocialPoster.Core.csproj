@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>true</IsPackable>
@@ -19,14 +19,14 @@
     <ItemGroup>
         <!-- Packages rather than the Microsoft.AspNetCore.App framework, so non-server hosts such as
              .NET MAUI (Mac Catalyst has no ASP.NET Core runtime) can use Core. -->
-        <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.13" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.13" />
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
         <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />
         <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
         <ProjectReference Include="..\SocialPoster.Posting\SocialPoster.Posting.csproj" />
         <!-- Its build targets provision platform CLI assets in package consumers, not only this project. -->
-        <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.22" PrivateAssets="none" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.13" />
+        <PackageReference Include="GitHub.Copilot.SDK" Version="1.0.31" PrivateAssets="none" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0" />
         <None Include="..\..\README.md" Pack="true" PackagePath="\" />
         <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
         <Using Include="Microsoft.Extensions.Logging" />
