@@ -174,7 +174,7 @@ jobs:
   desktop-macos:
     needs: version
     if: ${{ !cancelled() && !failure() }}
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -182,17 +182,16 @@ jobs:
           dotnet-version: 11.0.x
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.0' # must match the SDK pack below
+          xcode-version: '27.2' # must match the workload's Mac Catalyst SDK pack
       - run: dotnet workload install maui-maccatalyst --version ${{ env.DOTNET_WORKLOAD_VERSION }}
-      # The newest Mac Catalyst SDK can require an Xcode the runner image doesn't have yet, so build against the
-      # 26.0 SDK pack the workload also installs. Each pack requires its exact Xcode major.minor version.
+      # The .NET 11 workload ships only the Mac Catalyst 27.2 SDK pack (no older 26.0 pack), so build against the
+      # default TFM. Each pack requires its exact Xcode major.minor version.
       # Serialize MSBuild to avoid concurrent native-library rewrites during Mac Catalyst packaging.
       # The app is ad-hoc signed (CodesignKey=-): there's no Developer ID certificate, so it isn't notarized.
       - name: Publish
         run: >-
           dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
-          --framework net11.0-maccatalyst26.0
-          -p:MacCatalystSdkVersion=26.0 -m:1
+          --framework net11.0-maccatalyst -m:1
           -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=-
         working-directory: src
       - name: Zip
