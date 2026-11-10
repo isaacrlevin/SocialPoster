@@ -110,14 +110,15 @@ jobs:
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
           & $iscc "/DAppVersion=$version" "/DArch=${{ matrix.arch }}" "/DSourceDir=$PWD\artifacts\SocialPoster" "/DOutputDir=$PWD\artifacts" installers/windows/SocialPoster.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed ($LASTEXITCODE)" }
-      - uses: actions/upload-artifact@v4
-        if: needs.version.outputs.release == 'true'
-        with:
-          name: desktop-windows-${{ matrix.arch }}
-          path: |
-            artifacts/*.zip
-            artifacts/*-setup.exe
-          retention-days: 1
+
+#      - uses: actions/upload-artifact@v4
+#        if: needs.version.outputs.release == 'true'
+#        with:
+#          name: desktop-windows-${{ matrix.arch }}
+#          path: |
+#            artifacts/*.zip
+#            artifacts/*-setup.exe
+#          retention-days: 1
 
   # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). Upload the
   # artifacts to Partner Center by hand. Until the Store* identity in SocialPoster.MAUI.csproj is filled in, this
@@ -163,12 +164,13 @@ jobs:
           New-Item -ItemType Directory -Force artifacts/store | Out-Null
           Copy-Item $msix.FullName artifacts/store/
           Get-ChildItem artifacts/store
-      - uses: actions/upload-artifact@v4
-        if: steps.identity.outputs.configured == 'true' && needs.version.outputs.release == 'true'
-        with:
-          name: store-windows-${{ matrix.arch }}
-          path: artifacts/store/*.msix
-          retention-days: 14
+
+#      - uses: actions/upload-artifact@v4
+#       if: steps.identity.outputs.configured == 'true' && needs.version.outputs.release == 'true'
+#        with:
+#          name: store-windows-${{ matrix.arch }}
+#          path: artifacts/store/*.msix
+#          retention-days: 14
 
   # Desktop app for macOS (Mac Catalyst, Intel and Apple silicon). Can only be built on macOS.
   desktop-macos:
@@ -212,14 +214,15 @@ jobs:
           ditto artifacts/SocialPoster.app dmg/SocialPoster.app
           ln -s /Applications dmg/Applications
           hdiutil create -volname SocialPoster -srcfolder dmg -ov -format UDZO artifacts/SocialPoster-macos.dmg
-      - uses: actions/upload-artifact@v4
-        if: needs.version.outputs.release == 'true'
-        with:
-          name: desktop-macos
-          path: |
-            artifacts/SocialPoster-macos.zip
-            artifacts/SocialPoster-macos.dmg
-          retention-days: 1
+
+#      - uses: actions/upload-artifact@v4
+#        if: needs.version.outputs.release == 'true'
+#        with:
+#          name: desktop-macos
+#          path: |
+#            artifacts/SocialPoster-macos.zip
+#            artifacts/SocialPoster-macos.dmg
+#          retention-days: 1
 
   # Creates the tag and GitHub release (with generated notes) on this commit and attaches the desktop apps. Runs after
   # publish, so a failed NuGet push leaves no tag and the next run on main tries the release again.
