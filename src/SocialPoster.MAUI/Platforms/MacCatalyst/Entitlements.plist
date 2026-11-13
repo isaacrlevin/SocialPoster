@@ -9,5 +9,8 @@
         <false/>
         <key>com.apple.security.network.client</key>
         <true/>
+        <!-- .NET 11 runs Mac Catalyst apps on CoreCLR, which JIT-compiles; the hardened runtime blocks that without this. -->
+        <key>com.apple.security.cs.allow-jit</key>
+        <true/>
     </dict>
 </plist>

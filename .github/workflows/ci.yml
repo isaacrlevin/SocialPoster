@@ -189,16 +189,34 @@ jobs:
       # default TFM. Each pack requires its exact Xcode major.minor version.
       # Serialize MSBuild to avoid concurrent native-library rewrites during Mac Catalyst packaging.
       # The app is ad-hoc signed (CodesignKey=-): there's no Developer ID certificate, so it isn't notarized.
+      # The runner image sets MD_APPLE_SDK_ROOT, which the SDK no longer reads (it warns); setup-xcode already
+      # selected the Xcode to use. CopilotSkipCliDownload is also set in the csproj; passing it globally makes sure
+      # no referenced project bundles the Copilot CLI into the app.
       - name: Publish
-        run: >-
-          dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
-          --framework net11.0-maccatalyst -m:1
-          -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=-
+        run: |
+          unset MD_APPLE_SDK_ROOT
+          dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release \
+            --framework net11.0-maccatalyst -m:1 \
+            -p:CreatePackage=false -p:EnableCodeSigning=true -p:CodesignKey=- -p:CopilotSkipCliDownload=true
         working-directory: src
+      # The build leaves a thin .app per RID (maccatalyst-x64, maccatalyst-arm64) and a universal one; ship the
+      # universal one. Its location under bin/Release has moved between SDKs, so pick it by architecture, not path.
       - name: Collect app
         run: |
-          app=$(find src/SocialPoster.MAUI/bin/Release -mindepth 2 -maxdepth 2 -name '*.app' -type d | head -n 1)
-          if [ -z "$app" ]; then echo "No .app bundle found:"; find src/SocialPoster.MAUI/bin -name '*.app' -type d; exit 1; fi
+          app=""
+          while IFS= read -r candidate; do
+            exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$candidate/Contents/Info.plist" 2>/dev/null) || continue
+            archs=$(lipo -archs "$candidate/Contents/MacOS/$exe" 2>/dev/null || echo unknown)
+            echo "$candidate: $archs"
+            case " $archs " in *" x86_64 "*) case " $archs " in *" arm64 "*) app="$candidate" ;; esac ;; esac
+          done < <(find src/SocialPoster.MAUI/bin/Release -maxdepth 3 -name 'SocialPoster.app' -type d -not -path '*/runtimes/*')
+          if [ -z "$app" ]; then echo "::error::No universal (x86_64 + arm64) SocialPoster.app found."; exit 1; fi
+          nested=$(find "$app" -mindepth 2 -name '*.app' -type d)
+          if [ -n "$nested" ]; then
+            echo "::error::$app contains nested .app bundles (is the Copilot CLI being bundled?):"
+            echo "$nested"
+            exit 1
+          fi
           echo "Packaging $app"
           codesign --verify --deep --strict "$app"
           mkdir -p artifacts
