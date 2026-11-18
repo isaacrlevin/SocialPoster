@@ -412,6 +412,7 @@ else
                 [nameof(SuggestedConflictsDialog.Conflicts)] = conflicts,
                 [nameof(SuggestedConflictsDialog.MinLikelihood)] = conflictMinLikelihood,
                 [nameof(SuggestedConflictsDialog.Review)] = (Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>>)ReviewFromDialogAsync,
+                [nameof(SuggestedConflictsDialog.NotMatch)] = (Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>>)NotMatchFromDialogAsync,
             }, new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
             var result = await dialog.Result;
             if (result is { Canceled: false, Data: SuggestedConflictsDialog.DismissResult }) await DismissConflictsAsync();
@@ -429,6 +430,29 @@ else
         await ReviewMergeAsync(conflict);
         StateHasChanged();
         return conflicts;
+    }
+
+    private async Task<IReadOnlyList<ContactConflict>?> NotMatchFromDialogAsync(ContactConflict conflict)
+    {
+        if (busy || syncing || scanningConflicts || merging) return conflicts;
+        try
+        {
+            await ContactSvc.MarkNotDuplicateAsync(conflict.Left.Id, conflict.Right.Id);
+            await ForgetNotMatchAsync(conflict.Left, conflict.Right);
+        }
+        catch (Exception ex) { Flash(ex.Message, true); }
+        StateHasChanged();
+        return conflicts;
+    }
+
+    // After a pair is marked "Not a match" (from the list or the review screen): drop it and tell the user.
+    private async Task ForgetNotMatchAsync(Contact left, Contact right)
+    {
+        var key = ContactService.PairKey(left.Id, right.Id);
+        conflicts = conflicts?.Where(c => ContactService.PairKey(c.Left.Id, c.Right.Id) != key).ToList();
+        if (mergeSelection.ContainsKey(left.Id) && mergeSelection.ContainsKey(right.Id)) mergeSelection.Clear();
+        Flash($"Marked {left.DisplayName} and {right.DisplayName} as not a match. Future scans won't suggest them.");
+        await PersistConflictsAsync();
     }
 
     private DuplicateLikelihood? SelectedLikelihood => mergeSelection.Count == 2
@@ -808,7 +832,10 @@ else
             var dialog = await Dialogs.ShowAsync<MergeContactsDialog>("Review contact merge",
                 new DialogParameters { [nameof(MergeContactsDialog.Preview)] = preview },
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
-            if (await dialog.Result is { Canceled: false })
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: MergeContactsDialog.NotMatchResult })
+                await ForgetNotMatchAsync(preview.Left, preview.Right);
+            else if (result is { Canceled: false })
             {
                 editing = null;
                 RemoveMergedSelections(leftId, rightId);

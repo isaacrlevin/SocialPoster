@@ -64,6 +64,46 @@ public class ContactMaintenanceTests
         Assert.DoesNotContain("possible duplicate", await host.RenderAsync<Contacts>(null));
     }
 
+    [Fact]
+    public async Task Not_a_match_hides_pair_from_scans_and_saved_results_follows_merges_and_cascades_on_delete()
+    {
+        await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
+        var service = host.Provider.GetRequiredService<ContactService>();
+        var a = new Contact { Key = "a", DisplayName = "First", XUsername = "same" };
+        var b = new Contact { Key = "b", DisplayName = "Second", XUsername = "@SAME" };
+        var c = new Contact { Key = "c", DisplayName = "Third", XUsername = "same" };
+        var d = new Contact { Key = "d", DisplayName = "Fourth", BlueskyHandle = "d.bsky.social" };
+        await using (var db = await host.Factory.CreateDbContextAsync())
+        {
+            db.Contacts.AddRange(a, b, c, d);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(3, (await service.FindConflictsAsync()).Count); // a-b, a-c, b-c
+        using (var scope = host.Provider.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ConflictResultsStore>().SaveAsync(await service.FindConflictsAsync());
+
+        await service.MarkNotDuplicateAsync(b.Id, a.Id);
+        await service.MarkNotDuplicateAsync(a.Id, b.Id); // idempotent, order-independent
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.MarkNotDuplicateAsync(a.Id, a.Id));
+        Assert.Equal([ContactService.PairKey(a.Id, b.Id)], await service.ListNotDuplicatesAsync());
+        var remaining = await service.FindConflictsAsync();
+        Assert.DoesNotContain(remaining, p => ContactService.PairKey(p.Left.Id, p.Right.Id) == ContactService.PairKey(a.Id, b.Id));
+        Assert.Equal(2, remaining.Count);
+        using (var scope = host.Provider.CreateScope())
+            Assert.Equal(2, (await scope.ServiceProvider.GetRequiredService<ConflictResultsStore>().LoadAsync())!.Count);
+
+        // a is merged into d: "a is not b" now means "d is not b".
+        await service.MarkNotDuplicateAsync(a.Id, d.Id); // a pair the user later merges anyway is dropped
+        var merge = await service.PreviewMergeAsync(a.Id, d.Id);
+        await service.MergeAsync(merge, d.Id, new Dictionary<Platform, int>());
+        Assert.Equal([ContactService.PairKey(b.Id, d.Id)], await service.ListNotDuplicatesAsync());
+        Assert.DoesNotContain(await service.FindConflictsAsync(), p => ContactService.PairKey(p.Left.Id, p.Right.Id) == ContactService.PairKey(b.Id, d.Id));
+
+        await service.DeleteAsync(b.Id);
+        Assert.Empty(await service.ListNotDuplicatesAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.MarkNotDuplicateAsync(b.Id, c.Id));
+    }
+
     [Theory]
     [InlineData(Platform.X)]
     [InlineData(Platform.Bluesky)]
@@ -566,6 +606,62 @@ public class ContactMaintenanceTests
             SetField(dialog, "confirmed", true);
             await InvokeActionAsync(dialog, "PurgeAsync");
             Assert.Null(await service.GetAsync(right.Id));
+        });
+    }
+
+    [Fact]
+    public async Task Review_dialog_not_a_match_records_pair_without_merging_and_is_hidden_in_import_mode()
+    {
+        await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
+        var service = host.Provider.GetRequiredService<ContactService>();
+        var left = new Contact { Key = "a", DisplayName = "First", XUsername = "same" };
+        var right = new Contact { Key = "b", DisplayName = "Second", XUsername = "same" };
+        await using (var db = await host.Factory.CreateDbContextAsync())
+        {
+            db.Contacts.AddRange(left, right);
+            await db.SaveChangesAsync();
+        }
+        var preview = await service.PreviewMergeAsync(left.Id, right.Id);
+        var parameters = new Dictionary<string, object?> { [nameof(MergeContactsDialog.Preview)] = preview };
+        Assert.Contains("Not a match", await host.RenderDialogAsync<MergeContactsDialog>(parameters));
+        Assert.DoesNotContain("Not a match", await host.RenderDialogAsync<MergeContactsDialog>(
+            new() { [nameof(MergeContactsDialog.Preview)] = preview, [nameof(MergeContactsDialog.ImportMode)] = true }));
+
+        MudBlazor.DialogResult? result = null;
+        await host.RenderDialogAsync<MergeContactsDialog>(parameters,
+            dialog => InvokeActionAsync(dialog, "NotMatchAsync"), answer => result = answer);
+        Assert.Equal(MergeContactsDialog.NotMatchResult, result?.Data);
+        Assert.Equal([ContactService.PairKey(left.Id, right.Id)], await service.ListNotDuplicatesAsync());
+        Assert.Equal(2, (await service.ListAsync()).Count);
+        Assert.Empty(await service.FindConflictsAsync());
+    }
+
+    [Fact]
+    public async Task Clicking_identity_card_selects_survivor_and_resets_confirmation()
+    {
+        await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
+        var service = host.Provider.GetRequiredService<ContactService>();
+        var left = new Contact { Key = "a", DisplayName = "First", XUsername = "one" };
+        var right = new Contact { Key = "b", DisplayName = "Second", BlueskyHandle = "two.bsky.social" };
+        await using (var db = await host.Factory.CreateDbContextAsync())
+        {
+            db.Contacts.AddRange(left, right);
+            await db.SaveChangesAsync();
+        }
+        var preview = await service.PreviewMergeAsync(left.Id, right.Id);
+        await host.RenderDialogAsync<MergeContactsDialog>(new() { [nameof(MergeContactsDialog.Preview)] = preview }, dialog =>
+        {
+            var select = dialog.GetType().GetMethod("SelectSurvivor", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            SetField(dialog, "confirmed", true);
+            select.Invoke(dialog, [right.Id]);
+            Assert.Equal(right.Id, GetField(dialog, "survivorId"));
+            Assert.Equal(false, GetField(dialog, "confirmed"));
+            SetField(dialog, "confirmed", true);
+            select.Invoke(dialog, [right.Id]); // re-selecting the current survivor keeps confirmation
+            Assert.Equal(true, GetField(dialog, "confirmed"));
+            select.Invoke(dialog, [left.Id]);
+            Assert.Equal(left.Id, GetField(dialog, "survivorId"));
+            return Task.CompletedTask;
         });
     }
 

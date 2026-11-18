@@ -479,11 +479,18 @@ public class MastodonTests
                 ALTER TABLE "Contacts" DROP COLUMN "MastodonAcct";
                 ALTER TABLE "Contacts" DROP COLUMN "MastodonUri";
                 ALTER TABLE "Contacts" DROP COLUMN "MastodonProfileUrl";
+                DROP TABLE "ContactNotDuplicates";
                 """);
             await db.UpgradeSchemaAsync();
             await db.UpgradeSchemaAsync();
         }
         Assert.Equal("keep", Assert.Single(await host.Contacts.ListAsync()).XUsername);
+        await host.AddAsync(new() { Key = "other", DisplayName = "Other", XUsername = "keep" });
+        var saved = await host.Contacts.ListAsync();
+        var legacy = saved.Single(c => c.Key == "legacy");
+        var other = saved.Single(c => c.Key == "other");
+        await host.Contacts.MarkNotDuplicateAsync(legacy.Id, other.Id);
+        Assert.Single(await host.Contacts.ListNotDuplicatesAsync());
         await host.Secrets.SetAsync("ui.disabledPlatforms", "[0,2]");
         var preferences = new PlatformPreferences(host.Secrets);
         await preferences.LoadAsync();

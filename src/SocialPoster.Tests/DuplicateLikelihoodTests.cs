@@ -201,4 +201,76 @@ public class DuplicateLikelihoodTests
         Assert.Equal([strong], reviewed);
         Assert.Equal(SuggestedConflictsDialog.DismissResult, result?.Data);
     }
+
+    [Fact]
+    public async Task Clicking_suggestion_row_opens_review_unless_disabled()
+    {
+        await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        Contact Make(int id, string name) => new() { Id = id, Key = $"k{id}", DisplayName = name, XUsername = "same" };
+        var conflict = new ContactConflict(Make(1, "A"), Make(2, "B"), ContactService.ScoreDuplicate(Make(1, "A"), Make(2, "B")));
+        var reviewed = new List<ContactConflict>();
+        Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>> review = c =>
+        {
+            reviewed.Add(c);
+            return Task.FromResult<IReadOnlyList<ContactConflict>?>([conflict]);
+        };
+        Dictionary<string, object?> Parameters(bool disabled) => new()
+        {
+            [nameof(SuggestedConflictsDialog.Conflicts)] = new List<ContactConflict> { conflict },
+            [nameof(SuggestedConflictsDialog.Review)] = review,
+            [nameof(SuggestedConflictsDialog.Disabled)] = disabled,
+        };
+        var html = await host.RenderDialogAsync<SuggestedConflictsDialog>(Parameters(false));
+        Assert.Contains("conflict-row selectable", html);
+        await host.RenderDialogAsync<SuggestedConflictsDialog>(Parameters(false), dialog =>
+            (Task)typeof(SuggestedConflictsDialog).GetMethod("RowClickAsync", flags)!.Invoke(dialog, [conflict])!);
+        Assert.Equal([conflict], reviewed);
+
+        Assert.DoesNotContain("Not a match", html); // hidden without a NotMatch callback
+
+        Assert.DoesNotContain("conflict-row selectable", await host.RenderDialogAsync<SuggestedConflictsDialog>(Parameters(true)));
+        await host.RenderDialogAsync<SuggestedConflictsDialog>(Parameters(true), dialog =>
+            (Task)typeof(SuggestedConflictsDialog).GetMethod("RowClickAsync", flags)!.Invoke(dialog, [conflict])!);
+        Assert.Single(reviewed);
+    }
+
+    [Fact]
+    public async Task Not_a_match_button_removes_pair_and_closes_when_none_remain()
+    {
+        await using var host = await PlatformSelectionTests.RenderHost.CreateAsync();
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        Contact Make(int id, string name) => new() { Id = id, Key = $"k{id}", DisplayName = name, XUsername = "same" };
+        var first = new ContactConflict(Make(1, "A"), Make(2, "B"), ContactService.ScoreDuplicate(Make(1, "A"), Make(2, "B")));
+        var second = new ContactConflict(Make(3, "C"), Make(4, "D"), ContactService.ScoreDuplicate(Make(3, "C"), Make(4, "D")));
+        var remaining = new List<ContactConflict> { first, second };
+        var reviewed = new List<ContactConflict>();
+        Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>> notMatch = c =>
+        {
+            remaining.Remove(c);
+            return Task.FromResult<IReadOnlyList<ContactConflict>?>(remaining.ToList());
+        };
+        var parameters = new Dictionary<string, object?>
+        {
+            [nameof(SuggestedConflictsDialog.Conflicts)] = remaining.ToList(),
+            [nameof(SuggestedConflictsDialog.Review)] = (Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>>)(c =>
+            {
+                reviewed.Add(c);
+                return Task.FromResult<IReadOnlyList<ContactConflict>?>(remaining);
+            }),
+            [nameof(SuggestedConflictsDialog.NotMatch)] = notMatch,
+        };
+        Assert.Contains("Not a match", await host.RenderDialogAsync<SuggestedConflictsDialog>(parameters));
+        MudBlazor.DialogResult? result = null;
+        await host.RenderDialogAsync<SuggestedConflictsDialog>(parameters, async dialog =>
+        {
+            var method = typeof(SuggestedConflictsDialog).GetMethod("NotMatchAsync", flags)!;
+            await (Task)method.Invoke(dialog, [first])!;
+            Assert.Equal([second], (IReadOnlyList<ContactConflict>)typeof(SuggestedConflictsDialog).GetField("filtered", flags)!.GetValue(dialog)!);
+            await (Task)method.Invoke(dialog, [second])!;
+        }, answer => result = answer);
+        Assert.Empty(reviewed); // "Not a match" never opens the merge review
+        Assert.NotNull(result);
+        Assert.False(result!.Canceled);
+    }
 }

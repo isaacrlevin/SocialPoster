@@ -193,6 +193,15 @@ code.key { padding: .1rem .4rem; border-radius: .4rem; background: var(--mud-pal
     border-radius: .75rem;
 }
 
+.merge-contact.selectable {
+    cursor: pointer;
+    transition: border-color .15s ease;
+}
+
+.merge-contact.selectable:hover:not(.survivor) {
+    border-color: var(--mud-palette-primary-lighten);
+}
+
 .merge-contact.survivor {
     border-color: var(--mud-palette-primary);
     box-shadow: 0 0 0 1px var(--mud-palette-primary);
@@ -291,6 +300,23 @@ code.key { padding: .1rem .4rem; border-radius: .4rem; background: var(--mud-pal
     padding: .6rem .75rem;
 }
 
+.conflict-row.selectable {
+    cursor: pointer;
+    border-radius: .5rem;
+    transition: background-color .15s ease;
+}
+
+.conflict-row.selectable:hover {
+    background-color: var(--mud-palette-action-default-hover);
+}
+
+.conflict-action {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem;
+}
+
 .conflict-row + .conflict-row {
     border-top: 1px solid var(--mud-palette-lines-default);
 }
@@ -331,7 +357,7 @@ code.key { padding: .1rem .4rem; border-radius: .4rem; background: var(--mud-pal
         grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .conflict-row .mud-button-root {
+    .conflict-row .conflict-action {
         grid-column: 1 / -1;
         justify-self: start;
     }

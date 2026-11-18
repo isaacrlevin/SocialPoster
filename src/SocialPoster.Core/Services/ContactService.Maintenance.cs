@@ -56,6 +56,7 @@ public sealed partial class ContactService
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         await db.ContactKeyAliases.ExecuteDeleteAsync(ct);
+        await db.ContactNotDuplicates.ExecuteDeleteAsync(ct);
         // Every search cache is contact-bound (key contact:{id}); none are useful without contacts.
         await db.AccountSearches.ExecuteDeleteAsync(ct);
         var count = await db.Contacts.ExecuteDeleteAsync(ct);
@@ -209,6 +210,22 @@ public sealed partial class ContactService
         foreach (var alias in await db.ContactKeyAliases.Where(k => k.ContactId == source.Id).ToListAsync(ct))
             alias.ContactId = survivor.Id;
         db.ContactKeyAliases.Add(new() { Key = source.Key, ContactId = survivor.Id });
+
+        // "Not a match" decisions about the source now describe the survivor (they are the same person).
+        var notDuplicates = await db.ContactNotDuplicates
+            .Where(n => n.LowId == source.Id || n.HighId == source.Id || n.LowId == survivor.Id || n.HighId == survivor.Id)
+            .ToListAsync(ct);
+        var survivorPairs = notDuplicates.Where(n => n.LowId != source.Id && n.HighId != source.Id)
+            .Select(n => (n.LowId, n.HighId)).ToHashSet();
+        foreach (var row in notDuplicates.Where(n => n.LowId == source.Id || n.HighId == source.Id))
+        {
+            db.ContactNotDuplicates.Remove(row);
+            var other = row.LowId == source.Id ? row.HighId : row.LowId;
+            if (other == survivor.Id) continue; // the user merged a pair they had marked; the merge wins
+            var key = PairKey(survivor.Id, other);
+            if (survivorPairs.Add(key))
+                db.ContactNotDuplicates.Add(new() { LowId = key.LowId, HighId = key.HighId, CreatedAtUtc = row.CreatedAtUtc });
+        }
 
         var caches = await db.AccountSearches.ToListAsync(ct);
         var sourcePrefix = AccountSearch.KeyFor(source.Id);

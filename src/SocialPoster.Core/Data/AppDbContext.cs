@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PostHistoryEntry> PostHistory => Set<PostHistoryEntry>();
     public DbSet<AccountSearch> AccountSearches => Set<AccountSearch>();
     public DbSet<ContactKeyAlias> ContactKeyAliases => Set<ContactKeyAlias>();
+    public DbSet<ContactNotDuplicate> ContactNotDuplicates => Set<ContactNotDuplicate>();
 
     /// <summary>Creates tables added after the first release. The schema is created with EnsureCreated, which doesn't upgrade existing databases.</summary>
     public async Task UpgradeSchemaAsync(CancellationToken ct = default)
@@ -43,6 +44,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 FOREIGN KEY ("ContactId") REFERENCES "Contacts" ("Id") ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS "IX_ContactKeyAliases_ContactId" ON "ContactKeyAliases" ("ContactId");
+            """, ct);
+        await Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "ContactNotDuplicates" (
+                "LowId" INTEGER NOT NULL,
+                "HighId" INTEGER NOT NULL,
+                "CreatedAtUtc" TEXT NOT NULL,
+                CONSTRAINT "PK_ContactNotDuplicates" PRIMARY KEY ("LowId", "HighId"),
+                FOREIGN KEY ("LowId") REFERENCES "Contacts" ("Id") ON DELETE CASCADE,
+                FOREIGN KEY ("HighId") REFERENCES "Contacts" ("Id") ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS "IX_ContactNotDuplicates_HighId" ON "ContactNotDuplicates" ("HighId");
             """, ct);
     }
 
@@ -93,6 +105,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne<Contact>().WithMany().HasForeignKey(a => a.ContactId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        b.Entity<ContactNotDuplicate>(e =>
+        {
+            e.HasKey(n => new { n.LowId, n.HighId });
+            e.HasIndex(n => n.HighId);
+            e.HasOne<Contact>().WithMany().HasForeignKey(n => n.LowId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Contact>().WithMany().HasForeignKey(n => n.HighId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         b.Entity<AccountSearch>(e =>
         {
             e.HasKey(s => s.Key);
@@ -109,6 +129,15 @@ public class ContactKeyAlias
     public string Key { get; set; } = "";
     /// <summary>The current surviving contact ID.</summary>
     public int ContactId { get; set; }
+}
+
+/// <summary>A contact pair the user marked "Not a match", so duplicate scans stop suggesting it.
+/// Stored with the smaller ID first.</summary>
+public class ContactNotDuplicate
+{
+    public int LowId { get; set; }
+    public int HighId { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public enum AccountSearchStatus

@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace SocialPoster.Core.Services;
 
@@ -51,8 +52,36 @@ public sealed partial class ContactService
         IProgress<(long Completed, long Total)>? progress = null)
     {
         var contacts = await ListAsync(ct: ct);
-        return await Task.Run(() => FindConflicts(contacts, ct, progress), ct);
+        var notDuplicates = await ListNotDuplicatesAsync(ct);
+        var found = await Task.Run(() => FindConflicts(contacts, ct, progress), ct);
+        return notDuplicates.Count == 0 ? found
+            : found.Where(c => !notDuplicates.Contains(PairKey(c.Left.Id, c.Right.Id))).ToList();
     }
+
+    /// <summary>Records that two contacts are not the same person, so scans stop suggesting the pair.
+    /// The decision follows a contact into any later merge.</summary>
+    public async Task MarkNotDuplicateAsync(int leftId, int rightId, CancellationToken ct = default)
+    {
+        if (leftId == rightId) throw new InvalidOperationException("Choose two different contacts.");
+        var (low, high) = PairKey(leftId, rightId);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        if (await db.Contacts.CountAsync(c => c.Id == low || c.Id == high, ct) != 2)
+            throw new InvalidOperationException("One of these contacts no longer exists.");
+        if (await db.ContactNotDuplicates.AnyAsync(n => n.LowId == low && n.HighId == high, ct)) return;
+        db.ContactNotDuplicates.Add(new() { LowId = low, HighId = high });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Pairs marked "Not a match", as (smaller ID, larger ID).</summary>
+    public async Task<IReadOnlySet<(int LowId, int HighId)>> ListNotDuplicatesAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var rows = await db.ContactNotDuplicates.AsNoTracking().Select(n => new { n.LowId, n.HighId }).ToListAsync(ct);
+        return rows.Select(n => (n.LowId, n.HighId)).ToHashSet();
+    }
+
+    /// <summary>The order-independent key for a contact pair.</summary>
+    public static (int LowId, int HighId) PairKey(int a, int b) => a < b ? (a, b) : (b, a);
 
     // Blocking: each contact is fingerprinted once (bio regexes and handle normalization are the expensive part),
     // indexed by every key that could link it to another, and only contacts sharing a key are scored.

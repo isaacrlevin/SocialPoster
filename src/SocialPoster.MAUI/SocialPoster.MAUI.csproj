@@ -19,7 +19,7 @@
 
         <ApplicationTitle>SocialPoster</ApplicationTitle>
         <ApplicationId>com.isaacrlevin.socialposter</ApplicationId>
-        <ApplicationDisplayVersion>0.7.2</ApplicationDisplayVersion>
+        <ApplicationDisplayVersion>0.7.3</ApplicationDisplayVersion>
         <ApplicationVersion>1</ApplicationVersion>
 
         <!-- Run unpackaged on Windows, like a normal desktop exe. See https://aka.ms/MauiTemplateUnpackaged
@@ -60,7 +60,7 @@
              and -p:PackageCertificateThumbprint=<thumbprint of a cert whose subject matches StorePublisher>. -->
         <AppxPackageSigningEnabled Condition="'$(AppxPackageSigningEnabled)' == ''">false</AppxPackageSigningEnabled>
         <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
-        <!-- Keep the manifest's TargetDeviceFamily (MinVersion 19041 for the virtualization exclusion, a current
+        <!-- Keep the manifest's TargetDeviceFamily (MinVersion 19041 to match the target framework, a current
              MaxVersionTested) instead of letting the packaging tools regenerate it from the properties below. -->
         <AppxAddDefaultTargetDeviceFamilyItem>false</AppxAddDefaultTargetDeviceFamilyItem>
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>

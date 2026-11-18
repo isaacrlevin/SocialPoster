@@ -20,6 +20,7 @@
   <p class="lead">Write one post and publish it to <strong>X</strong>, <strong>Bluesky</strong>, <strong>LinkedIn</strong>, <strong>Mastodon</strong> and <strong>Threads</strong>, now or on a schedule, with @-mentions converted correctly for each platform.</p>
   <div class="btns">
     <a class="btn primary" href="#quick-start">Get started</a>
+    <a class="btn" href="https://apps.microsoft.com/detail/9mt2w98x8z2q">Get it from the Microsoft Store</a>
     <a class="btn" href="https://github.com/isaacrlevin/SocialPoster/releases/latest">Download for Windows &amp; macOS</a>
     <a class="btn" href="https://github.com/isaacrlevin/SocialPoster">View on GitHub</a>
   </div>
@@ -75,9 +76,9 @@
 
     <section id="quick-start">
       <h2>Quick start</h2>
-      <p>There are three ways to use SocialPoster. They all run the same code, and the desktop app and Web project share one local data folder, so you can switch between them without reconnecting accounts.</p>
+      <p>There are three ways to use SocialPoster. They all run the same code, and the downloaded desktop app and Web project share one local data folder, so you can switch between them without reconnecting accounts.</p>
       <div class="cards">
-        <div class="card"><h3><a href="#desktop">Desktop app</a></h3><p>Download and run it on Windows or macOS, in its own window. No .NET needed.</p></div>
+        <div class="card"><h3><a href="#desktop">Desktop app</a></h3><p>Install it from the <a href="https://apps.microsoft.com/detail/9mt2w98x8z2q">Microsoft Store</a> on Windows, or download it for Windows or macOS. Runs in its own window; no .NET needed.</p></div>
         <div class="card"><h3><a href="#web">Host the Web project</a></h3><p>Run it in your browser on Windows, Linux or macOS with the .NET 10 SDK, or change the app.</p></div>
         <div class="card"><h3><a href="#packages">NuGet packages</a></h3><p>Add posting, or the whole UI, to your own .NET 10 app.</p></div>
       </div>
@@ -87,8 +88,11 @@
       </div>
 
       <h3 id="desktop">1. Desktop app (Windows and macOS)</h3>
-      <p>Prebuilt apps are attached to every <a href="https://github.com/isaacrlevin/SocialPoster/releases/latest">GitHub release</a>.</p>
-      <p><strong>Windows</strong> (Windows 10 version 1809 or later, with the <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>)</p>
+      <p><strong>Windows: Microsoft Store (recommended)</strong></p>
+      <p><a href="https://apps.microsoft.com/detail/9mt2w98x8z2q?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="200"></a></p>
+      <p>Get <a href="https://apps.microsoft.com/detail/9mt2w98x8z2q">SocialPoster from the Microsoft Store</a> (Windows 10 version 2004 or later, x64 or Arm64). It's signed by Microsoft, so there's no SmartScreen warning, and it updates automatically. The Store version keeps its data in its own app folder, which Windows deletes when you uninstall it; on first start it copies over the data from an existing installer or Web project install, and after that the two are separate.</p>
+      <p>Prebuilt apps for Windows and macOS are also attached to every <a href="https://github.com/isaacrlevin/SocialPoster/releases/latest">GitHub release</a>.</p>
+      <p><strong>Windows: installer from GitHub</strong> (Windows 10 version 1809 or later, with the <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 Runtime</a>)</p>
       <ol>
         <li>Download <code>SocialPoster-windows-x64-setup.exe</code> (most PCs) or <code>SocialPoster-windows-arm64-setup.exe</code> (Windows on Arm).</li>
         <li>Run it. The installer isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em>. Choose <em>More info → Run anyway</em>.</li>
@@ -100,7 +104,7 @@
         <li>The app isn't notarized, so macOS blocks it the first time. Open it once, then go to <em>System Settings → Privacy &amp; Security</em> and click <em>Open Anyway</em>. Or run <code>xattr -dr com.apple.quarantine /Applications/SocialPoster.app</code> in Terminal.</li>
         <li>To use GitHub Copilot as the agent, install the Copilot CLI (<code>npm install -g @github/copilot</code>) and run <code>copilot login</code>. The Windows app includes it; the Mac app doesn't.</li>
       </ol>
-      <p>To update, run the newer Windows installer, or drag the new app from the newer disk image into <em>Applications</em> on a Mac; your data is stored separately and kept. Scheduled posts go out while the window is open, and links open in your default browser.</p>
+      <p>To update, let the Store update it, run the newer Windows installer, or drag the new app from the newer disk image into <em>Applications</em> on a Mac; your data is stored separately and kept. Scheduled posts go out while the window is open, and links open in your default browser.</p>
       <details>
         <summary>Build the desktop app from source</summary>
         <p>Install the .NET 10 SDK and the MAUI workload once (<code>maui-windows</code> on Windows, <code>maui-maccatalyst</code> on macOS, which also needs Xcode), then run it:</p>

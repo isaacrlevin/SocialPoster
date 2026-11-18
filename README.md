@@ -15,14 +15,18 @@ provider) finds people's accounts and drafts posts from a link.
 
 | Way                                                                   | Best for                                                                    | You need                                       |
 |-----------------------------------------------------------------------|-----------------------------------------------------------------------------|------------------------------------------------|
-| [**Desktop app**](#1-use-the-desktop-app-windows-and-macos)           | Just using SocialPoster on Windows or macOS, in its own window              | A download from the [Releases page][releases]  |
+| [**Desktop app**](#1-use-the-desktop-app-windows-and-macos)           | Just using SocialPoster on Windows or macOS, in its own window              | The [Microsoft Store][store] (Windows) or the [Releases page][releases] |
 | [**Host the Web project**](#2-host-the-web-project)                   | Running it in your browser on any OS (including Linux), or changing the app | The .NET 10 SDK and a clone of this repository |
 | [**NuGet packages**](#3-reference-the-nuget-packages-in-your-own-app) | Adding posting, or the whole UI, to your own .NET app                       | A .NET 10 project                              |
 
-The desktop app and the Web project share the same local data folder, so you can switch between them without
-reconnecting accounts.
+<a href="https://apps.microsoft.com/detail/9mt2w98x8z2q?mode=direct"><img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="200"></a>
+
+The desktop app from the Releases page and the Web project share the same local data folder, so you can switch between
+them without reconnecting accounts. The Microsoft Store version keeps its own copy (see
+[Shared data](#1-use-the-desktop-app-windows-and-macos)).
 
 [releases]: https://github.com/isaacrlevin/SocialPoster/releases/latest
+[store]: https://apps.microsoft.com/detail/9mt2w98x8z2q
 
 ![Compose page](img/compose.png)
 
@@ -423,9 +427,18 @@ Copilot subscription, or an OpenAI-compatible provider such as a local Ollama mo
 ### 1. Use the desktop app (Windows and macOS)
 
 `SocialPoster.MAUI` is a .NET MAUI Blazor Hybrid app that hosts the full UI in its own window, with no browser or local
-web server. Prebuilt apps are attached to every release, and you don't need .NET installed to run them.
+web server. On Windows, install it from the Microsoft Store; prebuilt apps for Windows and macOS are also attached to
+every GitHub release. You don't need .NET installed to run them.
 
-**Windows**
+**Windows: Microsoft Store (recommended)**
+
+Get [SocialPoster from the Microsoft Store][store] and choose **Get** (or **Install**). The Store version is signed by
+Microsoft, so there's no SmartScreen warning, it updates automatically, and you uninstall it like any other Store app.
+It's available for x64 and Arm64 PCs.
+
+**Windows: installer from GitHub**
+
+If you can't use the Store, or want to share data with the Web project:
 
 1. From the [latest release][releases], download `SocialPoster-windows-x64-setup.exe` (most PCs) or
    `SocialPoster-windows-arm64-setup.exe` (Windows on Arm, such as Snapdragon laptops).
@@ -462,12 +475,14 @@ the old one.
 
 **What to know**
 
-- **Requirements.** Windows 10 version 1809 or later (x64 or Arm64) with the
-  [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), or macOS 12 or later on
-  Intel or Apple silicon.
-- **Shared data.** It uses the same data folder and key ring as the Web project, so accounts, contacts, history and
-  scheduled posts are shared between them. You can run both at once: scheduled posts are claimed atomically, so each
-  goes out once.
+- **Requirements.** Windows 10 version 1809 or later (version 2004 or later for the Store version; x64 or Arm64) with
+  the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/), or macOS 12 or later
+  on Intel or Apple silicon.
+- **Shared data.** The installer and macOS builds use the same data folder and key ring as the Web project, so
+  accounts, contacts, history and scheduled posts are shared between them. You can run both at once: scheduled posts
+  are claimed atomically, so each goes out once. The Microsoft Store version keeps its data in its own app folder,
+  which Windows deletes when you uninstall it. The first time it starts, it copies over the data from an existing
+  installer or Web project install (if there is one and it isn't in use); after that the two are separate.
 - **Scheduling.** The app runs the scheduling worker while its window is open. Closing the window stops it, waiting up
   to 10 seconds for a post that is already going out. Posts due while the app is closed go out the next time it (or the
   Web project) runs, unless they are more than 24 hours overdue (see [Scheduling posts](#scheduling-posts)).
@@ -1069,9 +1084,18 @@ app's version is `<ApplicationDisplayVersion>` in `src/SocialPoster.MAUI/SocialP
   the version (and fails if the four don't match), and if there's no `v<version>` tag yet, the release runs. The
   `publish` job packs and pushes to nuget.org, then the `release` job creates the tag and GitHub release on that commit
   (with generated notes) and attaches `SocialPoster-windows-x64-setup.exe`,
-  `SocialPoster-windows-arm64-setup.exe` and `SocialPoster-macos.dmg`. The Store MSIX (from the `desktop-windows-store`
-  job) isn't attached; it's uploaded to Partner Center by hand. If publishing fails, no tag is created, so the next push to `main` (or a manual run of the
-  workflow) tries again. The `publish` job pushes to nuget.org with
+  `SocialPoster-windows-arm64-setup.exe` and `SocialPoster-macos.dmg`. If publishing fails, no tag is created, so the
+  next push to `main` (or a manual run of the workflow) tries again.
+- **Microsoft Store:** after the release, the `store-publish` job bundles the x64 and arm64 MSIX packages from the
+  `desktop-windows-store` job into a `.msixupload` and submits it to the
+  [Store listing][store] with the [Microsoft Store Developer CLI](https://learn.microsoft.com/windows/apps/publish/msstore-dev-cli/overview).
+  The new submission copies the listing from the last published one and is committed for certification, so the update
+  reaches users once Microsoft approves it. The job needs four repository secrets from a Microsoft Entra app that has
+  the **Manager** role in Partner Center (Account settings → User management → Microsoft Entra applications):
+  `AZURE_AD_TENANT_ID`, `AZURE_AD_APPLICATION_CLIENT_ID`, `AZURE_AD_APPLICATION_SECRET` and `SELLER_ID`. If a
+  submission is still in certification, the job may fail; re-run it once that
+  one finishes.
+- **NuGet:** the `publish` job pushes to nuget.org with
   [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing): it exchanges the
   workflow's OIDC token for a short-lived API key, so no long-lived key is stored. A fork needs a trusted publishing
   policy for this repository and workflow on nuget.org, and a `NUGET_USER` secret holding the nuget.org user name.

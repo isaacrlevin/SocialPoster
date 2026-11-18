@@ -5,7 +5,7 @@ _Effective date: November 6, 2026_
 <!-- Keep in sync with docs/privacy.html, which is the published copy linked from the Microsoft Store listing. -->
 
 SocialPoster is an open-source app that publishes posts to X, Bluesky, LinkedIn, Mastodon and Threads. This policy
-covers the SocialPoster desktop app (from the Microsoft Store or GitHub releases) and the SocialPoster Web project when
+covers the SocialPoster desktop app (from the [Microsoft Store](https://apps.microsoft.com/detail/9mt2w98x8z2q) or GitHub releases) and the SocialPoster Web project when
 you run it yourself.
 
 ## The short version
@@ -19,7 +19,8 @@ you run it yourself.
 ## Information stored on your computer
 
 SocialPoster keeps its data in a local folder: `%LOCALAPPDATA%\SocialPoster` on Windows,
-`~/Library/Application Support/SocialPoster` on macOS, or `~/.local/share/SocialPoster` on Linux. It contains:
+`~/Library/Application Support/SocialPoster` on macOS, or `~/.local/share/SocialPoster` on Linux. The Microsoft
+Store version uses its own app data folder instead, which Windows deletes when you uninstall it. It contains:
 
 - **Credentials and settings** that you enter, such as platform access tokens, app passwords, API keys for AI and web
   search providers, and a GitHub token. These are encrypted with ASP.NET Core Data Protection. On Windows the

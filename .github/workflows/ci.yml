@@ -117,9 +117,8 @@ jobs:
           path: artifacts/*-setup.exe
           retention-days: 1
 
-  # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). Upload the
-  # artifacts to Partner Center by hand. Until the Store* identity in SocialPoster.MAUI.csproj is filled in, this
-  # builds with a placeholder identity to check that packaging still works, and uploads nothing.
+  # Microsoft Store packages (unsigned MSIX per architecture; the Store signs them on submission). When releasing,
+  # the store-publish job bundles them and submits them to Partner Center.
   desktop-windows-store:
     needs: version
     if: ${{ !cancelled() && !failure() }}
@@ -135,23 +134,11 @@ jobs:
         with:
           dotnet-version: 11.0.x
       - run: dotnet workload install maui-windows --version ${{ env.DOTNET_WORKLOAD_VERSION }}
-      - name: Check Store identity
-        id: identity
-        shell: pwsh
-        run: |
-          if (Select-String -Path src/SocialPoster.MAUI/SocialPoster.MAUI.csproj -Pattern '<Store(IdentityName|Publisher)[^>]*>[^<]*TODO' -Quiet) {
-            echo "::warning::The Store identity in SocialPoster.MAUI.csproj isn't set yet; building with a placeholder and skipping the upload."
-            "args=-p:StoreIdentityName=Placeholder.SocialPoster -p:StorePublisher=CN=00000000-0000-0000-0000-000000000000" >> $env:GITHUB_OUTPUT
-            "configured=false" >> $env:GITHUB_OUTPUT
-          } else {
-            "configured=true" >> $env:GITHUB_OUTPUT
-          }
       - name: Publish MSIX
         run: >-
           dotnet publish SocialPoster.MAUI/SocialPoster.MAUI.csproj --configuration Release
           --framework net11.0-windows10.0.19041.0 --runtime ${{ matrix.rid }} --self-contained true
           -p:WindowsPackageType=MSIX -p:AppxPackageDir=../../artifacts/msix/
-          ${{ steps.identity.outputs.args }}
         working-directory: src
       - name: Collect package
         shell: pwsh
@@ -163,7 +150,7 @@ jobs:
           Get-ChildItem artifacts/store
 
       - uses: actions/upload-artifact@v4
-        if: steps.identity.outputs.configured == 'true' && needs.version.outputs.release == 'true'
+        if: needs.version.outputs.release == 'true'
         with:
           name: store-windows-${{ matrix.arch }}
           path: artifacts/store/*.msix
@@ -268,6 +255,56 @@ jobs:
         run: |
           gh api --paginate "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name | startswith("desktop-")) | .id' |
             while read -r id; do gh api -X DELETE "repos/$GH_REPO/actions/artifacts/$id"; done
+
+  # Submits the release to the Microsoft Store (https://apps.microsoft.com/detail/9mt2w98x8z2q): bundles the x64 and
+  # arm64 MSIX packages into one .msixupload and publishes it with the Microsoft Store Developer CLI, which creates a
+  # new submission from the last published one (keeping its listing) with these packages, and commits it for
+  # certification. Runs after `release`, so the GitHub release always exists first; if it fails, re-run this job.
+  # Needs the four Partner Center secrets used below.
+  store-publish:
+    needs: [version, desktop-windows-store, release]
+    if: needs.version.outputs.release == 'true'
+    runs-on: windows-latest
+    env:
+      STORE_PRODUCT_ID: 9MT2W98X8Z2Q
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: store-windows-*
+          path: store/packages
+          merge-multiple: true
+      - name: Bundle packages
+        shell: pwsh
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          $packages = Get-ChildItem store/packages -Filter *.msix
+          $packages | Format-Table Name, Length
+          if ($packages.Count -lt 2) { throw "Expected the x64 and arm64 MSIX packages, found $($packages.Count)." }
+          $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $makeappx) { throw 'makeappx.exe not found in the Windows SDK.' }
+          # Same four-part version as the packages (StorePackageVersion in the csproj).
+          $version = "$($env:TAG.TrimStart('v')).0"
+          $bundle = "store/upload/SocialPoster_$version.msixbundle"
+          New-Item -ItemType Directory -Force store/upload | Out-Null
+          & $makeappx.FullName bundle /d store/packages /p $bundle /bv $version /o
+          if ($LASTEXITCODE -ne 0) { throw "makeappx failed ($LASTEXITCODE)" }
+          # A .msixupload is a zip with the bundle at its root.
+          Compress-Archive -Path $bundle -DestinationPath store/SocialPoster.zip -Force
+          Move-Item store/SocialPoster.zip "store/SocialPoster_$version.msixupload" -Force
+          "UPLOAD=$((Resolve-Path "store/SocialPoster_$version.msixupload").Path)" >> $env:GITHUB_ENV
+      - name: Set up Microsoft Store Developer CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+      - name: Configure Microsoft Store Developer CLI
+        run: >-
+          msstore reconfigure
+          --tenantId ${{ secrets.AZURE_AD_TENANT_ID }}
+          --sellerId ${{ secrets.SELLER_ID }}
+          --clientId ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
+          --clientSecret ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
+      - name: Submit to the Microsoft Store
+        run: msstore publish "$env:UPLOAD" -id $env:STORE_PRODUCT_ID
 
   publish:
     needs: [version, build]

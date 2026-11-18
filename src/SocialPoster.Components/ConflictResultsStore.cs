@@ -18,7 +18,7 @@ public sealed class ConflictResultsStore(SecretStore secrets, ContactService con
             results.Select(c => new SavedPair(c.Left.Id, c.Right.Id)).ToArray()));
 
     /// <summary>Restores suggestions with current contacts, re-scored from their current identities. Omits deleted or
-    /// merged-away rows and pairs with no remaining evidence. Does not scan.</summary>
+    /// merged-away rows, pairs marked "Not a match" and pairs with no remaining evidence. Does not scan.</summary>
     /// <returns>The saved suggestions (highest likelihood first), or null if no scan was saved.</returns>
     public async Task<IReadOnlyList<ContactConflict>?> LoadAsync()
     {
@@ -27,7 +27,9 @@ public sealed class ConflictResultsStore(SecretStore secrets, ContactService con
         var pairs = JsonSerializer.Deserialize<SavedPair[]>(json)
             ?? throw new InvalidOperationException("The saved conflict results are invalid.");
         var current = (await contacts.ListAsync()).ToDictionary(c => c.Id);
-        return pairs.Where(p => p.LeftId != p.RightId && current.ContainsKey(p.LeftId) && current.ContainsKey(p.RightId))
+        var notDuplicates = await contacts.ListNotDuplicatesAsync();
+        return pairs.Where(p => p.LeftId != p.RightId && current.ContainsKey(p.LeftId) && current.ContainsKey(p.RightId) &&
+                !notDuplicates.Contains(ContactService.PairKey(p.LeftId, p.RightId)))
             .Select(p => new ContactConflict(current[p.LeftId], current[p.RightId],
                 ContactService.ScoreDuplicate(current[p.LeftId], current[p.RightId])))
             .Where(c => c.Likelihood.HasSignal)

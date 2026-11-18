@@ -38,7 +38,9 @@
             @foreach (var contact in new[] { Preview.Left, Preview.Right })
             {
                 var isSurvivor = !ImportMode && contact.Id == survivorId;
-                <section class="merge-contact @(isSurvivor ? "survivor" : "")" aria-label="@contact.DisplayName">
+                <section class="merge-contact @(isSurvivor ? "survivor" : "") @(ImportMode ? "" : "selectable")" aria-label="@contact.DisplayName"
+                         title="@(ImportMode ? null : $"Choose {contact.DisplayName} as the survivor")"
+                         @onclick="() => SelectSurvivor(contact.Id)">
                     <div class="d-flex align-center gap-2">
                         <Avatar Url="@contact.AvatarUrl" Name="@contact.DisplayName" Size="40" />
                         <div class="merge-name">
@@ -69,8 +71,10 @@
                                 }
                                 @if (ProfileUrl(contact, platform) is { } url)
                                 {
-                                    <MudIconButton Href="@url" Target="_blank" rel="noopener noreferrer" Size="Size.Small"
-                                                   Icon="@Icons.Material.Filled.OpenInNew" aria-label="@($"Open {PlatformInfo.Label(platform)} profile")" />
+                                    <span @onclick:stopPropagation="true">
+                                        <MudIconButton Href="@url" Target="_blank" rel="noopener noreferrer" Size="Size.Small"
+                                                       Icon="@Icons.Material.Filled.OpenInNew" aria-label="@($"Open {PlatformInfo.Label(platform)} profile")" />
+                                    </span>
                                 }
                             </li>
                         }
@@ -155,12 +159,20 @@
         }
     </DialogContent>
     <DialogActions>
+        @if (!ImportMode)
+        {
+            <MudButton OnClick="NotMatchAsync" Disabled="@busy"
+                       title="These are different people. Future duplicate scans won't suggest this pair.">Not a match</MudButton>
+            <MudSpacer />
+        }
         <MudButton OnClick="() => Dialog.Cancel()" Disabled="@busy">Cancel</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanMerge || busy)" OnClick="MergeAsync">Confirm merge</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
+    /// <summary>Returned as dialog data when the user marks the pair "Not a match" instead of merging.</summary>
+    public const string NotMatchResult = "not-a-match";
     [CascadingParameter] public IMudDialogInstance Dialog { get; set; } = default!;
     [Parameter, EditorRequired] public ContactMergePreview Preview { get; set; } = default!;
     [Parameter] public bool ImportMode { get; set; }
@@ -188,6 +200,14 @@
 
     private void ResetConfirmation() => confirmed = false;
 
+    // Clicking a card is a shortcut for the "Surviving contact" dropdown, which stays the keyboard-accessible control.
+    private void SelectSurvivor(int id)
+    {
+        if (ImportMode || survivorId == id) return;
+        survivorId = id;
+        ResetConfirmation();
+    }
+
     private async Task MergeAsync()
     {
         if (!CanMerge || busy) return;
@@ -202,6 +222,19 @@
             }
             await ContactSvc.MergeAsync(Preview, survivorId, choices);
             Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task NotMatchAsync()
+    {
+        if (ImportMode || busy) return;
+        busy = true;
+        try
+        {
+            await ContactSvc.MarkNotDuplicateAsync(Preview.Left.Id, Preview.Right.Id);
+            Dialog.Close(DialogResult.Ok(NotMatchResult));
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }

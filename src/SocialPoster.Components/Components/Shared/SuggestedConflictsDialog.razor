@@ -28,7 +28,10 @@
         <ul class="conflict-list" aria-label="Suggested duplicates">
             @foreach (var conflict in filtered.Take(limit))
             {
-                <li class="conflict-row">
+                @* The whole row opens the review as a mouse shortcut; the button stays the keyboard-accessible control. *@
+                <li class="conflict-row @(busy || Disabled ? "" : "selectable")"
+                    title="@(busy || Disabled ? null : $"Review merge of {conflict.Left.DisplayName} and {conflict.Right.DisplayName}")"
+                    @onclick="() => RowClickAsync(conflict)">
                     <LikelihoodChip Score="@conflict.Score" />
                     <div class="conflict-text">
                         <div class="conflict-names">
@@ -38,8 +41,15 @@
                         </div>
                         <div class="conflict-reason" title="@conflict.Reason">@conflict.Reason</div>
                     </div>
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => ReviewAsync(conflict)" Disabled="@(busy || Disabled)"
-                               aria-label="@($"Review merge of {conflict.Left.DisplayName} and {conflict.Right.DisplayName}")">Review merge</MudButton>
+                    <span class="conflict-action" @onclick:stopPropagation="true">
+                        @if (NotMatch is not null)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => NotMatchAsync(conflict)" Disabled="@(busy || Disabled)"
+                                       aria-label="@($"{conflict.Left.DisplayName} and {conflict.Right.DisplayName} are not a match")">Not a match</MudButton>
+                        }
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => ReviewAsync(conflict)" Disabled="@(busy || Disabled)"
+                                   aria-label="@($"Review merge of {conflict.Left.DisplayName} and {conflict.Right.DisplayName}")">Review merge</MudButton>
+                    </span>
                 </li>
             }
         </ul>
@@ -74,6 +84,8 @@
     [Parameter, EditorRequired] public IReadOnlyList<ContactConflict> Conflicts { get; set; } = [];
     /// <summary>Opens the merge review for a pair and returns the suggestions that remain afterwards.</summary>
     [Parameter, EditorRequired] public Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>> Review { get; set; } = default!;
+    /// <summary>Records a pair as "Not a match" and returns the suggestions that remain afterwards. Hidden when null.</summary>
+    [Parameter] public Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>>? NotMatch { get; set; }
     [Parameter] public int MinLikelihood { get; set; }
     [Parameter] public bool Disabled { get; set; }
 
@@ -105,13 +117,17 @@
         Refilter();
     }
 
-    private async Task ReviewAsync(ContactConflict conflict)
+    private Task ReviewAsync(ContactConflict conflict) => ApplyAsync(Review, conflict);
+
+    private Task NotMatchAsync(ContactConflict conflict) => NotMatch is null ? Task.CompletedTask : ApplyAsync(NotMatch, conflict);
+
+    private async Task ApplyAsync(Func<ContactConflict, Task<IReadOnlyList<ContactConflict>?>> action, ContactConflict conflict)
     {
         if (busy) return;
         busy = true;
         try
         {
-            var remaining = await Review(conflict);
+            var remaining = await action(conflict);
             if (remaining is null || remaining.Count == 0)
             {
                 Dialog.Close(DialogResult.Ok(minLikelihood));
@@ -121,6 +137,8 @@
         }
         finally { busy = false; }
     }
+
+    private Task RowClickAsync(ContactConflict conflict) => Disabled ? Task.CompletedTask : ReviewAsync(conflict);
 
     private void Dismiss() => Dialog.Close(DialogResult.Ok(DismissResult));
 }
